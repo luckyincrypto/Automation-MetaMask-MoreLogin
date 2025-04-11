@@ -28,7 +28,7 @@
 - Откройте терминал (PowerShell, CMD, Git Bash или другой предпочитаемый инструмент командной строки).
 - Выполните команду для клонирования репозитория:
     ```bash
-    git clone https://github.com/твой_аккаунт/Automation-MetaMask-MoreLogin.git
+    git clone https://github.com/luckyincrypto/Automation-MetaMask-MoreLogin.git
     ```
 
 ### 2️⃣ Создание виртуального окружения:
