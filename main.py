@@ -23,12 +23,6 @@ from lava_moat import modify_file_runtimelavamoat
 from meta_mask import meta_mask, open_tab
 from create_mm_wallet import create_wallet
 
-from logger_setup import setup_logging
-
-# Вызов настройки логирования
-# logger = setup_logging()
-# logger = setup_logging(log_level=LOG_LEVEL)
-
 
 # Загрузка переменных окружения
 def setup_environment():
@@ -165,7 +159,7 @@ def get_user_input():
             start_account = int(input(f"С какого аккаунта начать, No: \n"))
             # print("Каким аккаунтом завершить, No: \n")
             end_account = int(input("Каким аккаунтом завершить, No: \n"))
-            if start_account > 0 and end_account >= start_account:
+            if 0 < start_account <= end_account:
                 break
             else:
                 logger.error("Не корректный ввод. Конечный аккаунт должен быть больше или равен начальному.")
@@ -228,13 +222,15 @@ async def operationEnv(driver, seed, env_id, password, mm_address, worksheet_mm,
         logger.debug(f'wallet_mm_from_browser_extension: {wallet_mm_from_browser_extension}, type: {type(wallet_mm_from_browser_extension)}')
 
         # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
-        # project_1(driver)
-        # project_2(driver)
-        # project_3(driver)
 
         open_tab(driver, ('https://testnet.monadexplorer.com/address/'+ wallet_mm_from_browser_extension))
-
         open_tab(driver, ('https://debank.com/profile/'+wallet_mm_from_browser_extension))
+        # open_tab(driver, 'https://faucet.morkie.xyz/monad')
+
+        # project_1(driver)  # для примера только
+        # project_2(driver)  # для примера только
+        # project_3(driver)  # для примера только
+
 
         return True
 
