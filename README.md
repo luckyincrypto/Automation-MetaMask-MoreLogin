@@ -164,7 +164,24 @@ pip install -r requirements.txt
 
 ![img_11.png](img_11.png)
 
-#### После успешного изменения файлов .env и config.yaml ваши настройки полностью подготовлены для работы со скриптом, обеспечивая корректное взаимодействие всех программных модулей.
+
+-  #### Установите расширение MetaMask в MoreLogin:
+    Скопируйте ссылку расширение MetaMask
+     
+     ```bash
+     https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn
+     ```
+
+    Установить MetaMask в разделе "Расширение & Приложение" 
+
+    ![MetaMask Example 1](img_2.png) 
+
+    ![MetaMask Example 2](img_3.png)  
+
+    Ссылка на MetaMask: [MetaMask в Chrome Store](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn)  
+    **Важно!** ID MetaMask: `nkbihfbeogaeaoehlefnkodbefgpgknn`
+
+#### После успешного изменения файлов .env и config.yaml а так же установки MetaMask в Morelogin ваши настройки полностью подготовлены для работы со скриптом, обеспечивая корректное взаимодействие всех программных модулей.
 
 #### Следующий шаг: запуск скрипта и проверка работы.
 
@@ -224,15 +241,11 @@ pip install -r requirements.txt
 ---
 
 ## 📜 Требования
-- **Python** версии 3.8 или выше (используемая версия: 3.13)  
-  Скачать: [Python 3.13](https://www.python.org/downloads/release/python-3130/)
+- **[Python 3.13](https://www.python.org/downloads/release/python-3130/)** версии 3.8 или выше (используемая версия: 3.13)   
 - **IDE:** [Pycharm](https://www.jetbrains.com/pycharm/) или [VS Code](https://code.visualstudio.com/)
-- **Антидетект браузер:** [MoreLogin](https://www.morelogin.com/?from=AANRkwFFphIV)  
-  *Morelogin является самым безопасным, наиболее подходящим для работы в команде и предлагает наилучшую экономическую эффективность.*
-- **Расширение MetaMask, установленное в MoreLogin:**  
-  Установить в разделе "Расширение & Приложение" ![MetaMask Example 1](img_2.png) ![MetaMask Example 2](img_3.png)  
-  Ссылка на MetaMask: [MetaMask в Chrome Store](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn)  
-  **Важно!** ID MetaMask: `nkbihfbeogaeaoehlefnkodbefgpgknn`
+- **[Git](https://git-scm.com/) установленный на компьютер.**
+- **Антидетект браузер: [MoreLogin](https://www.morelogin.com/?from=AANRkwFFphIV)** является самым безопасным, наиболее подходящим для работы в команде и предлагает наилучшую экономическую эффективность.
+- **Расширение [MetaMask в Chrome Store](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn) установленное в MoreLogin.**  
 
 <p align="right"><a href="#-содержание" style="font-size:x-small;">⬆️ Вернуться к содержанию</a></p>
 
