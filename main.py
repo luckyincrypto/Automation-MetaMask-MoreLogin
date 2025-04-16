@@ -11,6 +11,7 @@ import traceback
 import string
 import secrets
 from environs import Env
+from openpyxl.utils.exceptions import InvalidFileException
 
 from base_func_morelogin import requestHeader, postRequest
 from selenium import webdriver
@@ -20,12 +21,16 @@ from selenium.webdriver.chrome.options import Options
 
 from config import BASEURL, LOG_LEVEL, logger
 from lava_moat import modify_file_runtimelavamoat
-from meta_mask import meta_mask, open_tab
+from meta_mask import meta_mask, open_tab, delete_others_windows
 from create_mm_wallet import create_wallet
 
 
 # Загрузка переменных окружения
 def setup_environment():
+    if not os.path.exists('.env'):
+        logger.error("Файл .env не найден. Проверьте, что он существует в корне проекта.")
+
+
     env = Env()
     env.read_env()
     return (
@@ -58,7 +63,7 @@ class BrowserManager:
             request_path = f"{BASEURL}/api/env/start"
             data = {"envId": env_id, "encryptKey": SECRET_KEY}
             response = postRequest(request_path, data, requestHeader(APP_ID, APP_KEY)).json()
-            logger.info(f" (start_browser_profile) START & OPEN PROFILE: {response}")
+            logger.debug(f" (start_browser_profile) START & OPEN PROFILE: {response}")
             if response["code"] != 0:
                 raise ConnectionError(f" (start_browser_profile) Ошибка запуска профиля: {response['msg']}")
             return f"127.0.0.1:{response['data']['debugPort']}", response["data"]["webdriver"]
@@ -72,7 +77,7 @@ class BrowserManager:
         request_path = f"{BASEURL}/api/env/close"
         data = {"envId": env_id, "encryptKey": SECRET_KEY}
         response = postRequest(request_path, data, requestHeader(APP_ID, APP_KEY)).json()
-        logger.info(f" (stop_browser_profile) STOP & CLOSE PROFILE, Env ID: {env_id}.")
+        logger.debug(f" (stop_browser_profile) STOP & CLOSE PROFILE, Env ID: {env_id}.")
         return response
 
     @staticmethod
@@ -83,7 +88,10 @@ class BrowserManager:
         try:
             response = postRequest(requestPath, data, headers).json()
             if response["code"] != 0:
-                logger.error(f" (get_list_browser_profiles) Error: {response['msg']}")
+                logger.error(f" (get_list_browser_profiles) Error: {response['msg']}\n"
+                             f"Проверьте файл переменных окружения .env:\n"
+                             f" APP_ID, APP_KEY \n")
+
                 sys.exit(1)
             for env in response.get("data", {}).get("dataList", []):
                 if int(env["envName"][2:]) == unique_id:
@@ -92,13 +100,14 @@ class BrowserManager:
             logger.error(" (get_list_browser_profiles) Profile not found, check conditions.\n"
                          "1. Подключение к интернету\n"
                          "2. Запущенный антидетект браузер MoreLogin\n"
-                         "3. Наличие порядковых номеров в Базе Данных (file_DB.xlsx)\n")
+                         "3. Наличие порядковых номеров в Базе Данных (file_DB.xlsx) если файл создан и пустой.\n"
+                         "4. В файле config.py должен быть указан корректный BASEURL.")
             sys.exit(1)
 
 async def read_user_list_file(worksheet_mm, start_account, end_account, mix_profiles, workbook_mm):
     """Чтение данных из Excel-файла."""
     profiles = []
-    logger.info(f"[DATABASE READ] Чтение из базы данных Excel-файла. От {start_account} до {end_account}.")
+    logger.debug(f"[DATABASE READ] Чтение из базы данных Excel-файла. От {start_account} до {end_account}.")
     for row in range(start_account, end_account + 1):
         if row is None:
             logger.warning("Переменная row не инициализирована.")
@@ -167,7 +176,7 @@ def get_user_input():
             logger.error("Ошибка! Введите числовые значения.")
 
     logger.info(
-        f"Запуск профилей от {start_account} до {end_account}. Всего: {end_account - start_account + 1} профилей.")
+        f"Запуск профилей от {start_account} до {end_account}.")
     time.sleep(1)
 
     mix_profiles = 'no'
@@ -223,13 +232,15 @@ async def operationEnv(driver, seed, env_id, password, mm_address, worksheet_mm,
 
         # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
-        open_tab(driver, ('https://testnet.monadexplorer.com/address/'+ wallet_mm_from_browser_extension))
-        open_tab(driver, ('https://debank.com/profile/'+wallet_mm_from_browser_extension))
-        # open_tab(driver, 'https://faucet.morkie.xyz/monad')
+        # open_tab(driver, ('https://testnet.monadexplorer.com/address/'+ wallet_mm_from_browser_extension))
+        # open_tab(driver, ('https://debank.com/profile/'+wallet_mm_from_browser_extension))
+        # open_tab(driver, 'https://morkie.xyz/id')
+        # open_tab(driver, 'https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH')
 
         # project_1(driver)  # для примера только
         # project_2(driver)  # для примера только
         # project_3(driver)  # для примера только
+
 
 
         return True
@@ -259,6 +270,7 @@ async def main_flow(env_id, seed, password, env_name, unique_id, mm_address, wor
             # Основные операции
             logger.debug(f" (main_flow) STEP 1 <<< Начало работы в Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} >>>")
             if not await operationEnv(driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, env_name, unique_id):
+                delete_others_windows(driver)
                 driver.quit()
                 await BrowserManager.stop_browser_profile(env_id)
                 logger.warning(f'\n (main_flow), (operationEnv) Не удачный запуск! Повторный запуск через 5 секунд! Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id}')
@@ -278,10 +290,9 @@ async def main_flow(env_id, seed, password, env_name, unique_id, mm_address, wor
     finally:
         # Завершаем профиль корректно
         if mode_close_profile_or_not.lower() == "y":
+            delete_others_windows(driver)
             driver.quit()
             await BrowserManager.stop_browser_profile(env_id)
-            logger.info(f"\n{"#" * 20} (main_flow) SCRIPT ENDED Profile №: {unique_id}, Env_Name: {env_name}, "
-                        f"Env ID: {env_id} завершён {"#" * 20}")
 
 async def main():
     """Главная функция для обработки всех профилей."""
@@ -292,15 +303,29 @@ async def main():
     # Открытие базы данных
     def workbook_worksheet():
         # код для работы с worksheet_mm здесь
-        workbook_mm = openpyxl.load_workbook(FILE_PATH)
-        worksheet_mm = workbook_mm[WORKSHEET_NAME]
-        logger.info(f" (workbook_worksheet) DATABASE Рабочий лист базы данных: {worksheet_mm.title}")
-        return workbook_mm, worksheet_mm
+        try:
+            workbook_mm = openpyxl.load_workbook(FILE_PATH)
+            worksheet_mm = workbook_mm[WORKSHEET_NAME]
+            logger.debug(f" (workbook_worksheet) DATABASE Рабочий лист базы данных: {worksheet_mm.title}")
+            return workbook_mm, worksheet_mm
+        except KeyError:
+            logger.error(f" (workbook_worksheet) Error: Нет доступа к рабочему листу базы данных: {WORKSHEET_NAME}\n"
+                         f"Проверьте файл переменных окружения .env:\n"
+                             f" WORKSHEET_NAME \n")
+            traceback.print_exc()
+            sys.exit(1)  # Завершение программы с кодом ошибки 1
+        except InvalidFileException:
+            logger.error(f" (workbook_worksheet) Error: Неверный формат файла базы данных: {FILE_PATH}\n"
+                         f"Проверьте файл переменных окружения .env:\n"
+                             f" DATA_BASE \n")
+            traceback.print_exc()
+            sys.exit(1)  # Завершение программы с кодом ошибки 1
+
 
     # Проверка существует ли файл с базой данных DB.xlsx
     if os.path.exists(FILE_PATH):
         # Если файл существует, загружаем его
-        logger.info(f" (main) DATABASE exists: {FILE_PATH}.")
+        logger.debug(f" (main) DATABASE exists: {FILE_PATH}.")
         workbook_mm, worksheet_mm = workbook_worksheet()
 
     else:
@@ -328,7 +353,7 @@ async def main():
 
     # Получаем список профилей
     profiles = await read_user_list_file(worksheet_mm, start_account, end_account, mix_profiles, workbook_mm)
-    logger.info(f" (main) PROFILES will carry out: {len(profiles)}.\n")
+    logger.info(f" (main) Profiles will be processed: {len(profiles)}.\n")
 
     for profile in profiles:
         count_profile += 1
@@ -340,7 +365,7 @@ async def main():
         )
 
         start_time = datetime.now()
-        logger.info(
+        logger.debug(
             f"\n (main) PROFILE INFO, №: {count_profile} from {len(profiles)}, "
             f"Acc ID: {unique_id}, EnvName: {env_name}, MetaMask address: {mm_address}, Seed: {seed}, "
             f"Password: {password}, Private_key: {private_key}, Row: {row}, Start: {start_time}"
@@ -349,9 +374,10 @@ async def main():
         # Основной рабочий процесс
         await main_flow(env_id, seed, password, env_name, unique_id, mm_address, worksheet_mm, workbook_mm, row)
 
-        # Время выполнения профиля
+        # Время на выполнения профиля
         profile_duration = datetime.now() - start_time
-        logger.warning(f" (main) PROFILE: {unique_id}, TIME spent: {profile_duration}\n")
+        logger.warning(f"\n{"#" * 20} (main_flow) SCRIPT ENDED Profile №: {unique_id}, Env_Name: {env_name}, "
+                    f"Env ID: {env_id}, time spent: {profile_duration} {"#" * 20}")
 
         # Задержка между профилями
         if delay_from_to and count_profile != len(profiles):
@@ -366,6 +392,4 @@ async def main():
 
 
 if __name__ == '__main__':
-    # Вызов настройки логирования
-    # logger = setup_logging()
     asyncio.run(main())

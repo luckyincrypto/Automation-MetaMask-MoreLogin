@@ -73,14 +73,7 @@ def open_tab(driver, url):
     logger.debug(f' (open_tab) tab is open: {url} ')
 
 def unlock(driver):
-    # Получаем текущий URL
-    driver.refresh()
-    time.sleep(2)
-
-    current_url = driver.current_url
-    logger.debug(f" (unlock), Current URL_0: {current_url}")
-
-    if current_url == 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#unlock':
+    if check_page_url(driver, url='chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#unlock'):
         try:
             data_testid = "unlock-page"
             path_css_selector = f'[data-testid={data_testid}]'
@@ -90,7 +83,7 @@ def unlock(driver):
                 EC.visibility_of_element_located((By.CSS_SELECTOR, path_css_selector))
             ):
                 # phrase = element.text
-                logger.info(f' (unlock) Welcome back!')
+                logger.debug(f' (unlock) True')
                 return True
 
         except NoSuchElementException as e:
@@ -100,7 +93,6 @@ def unlock(driver):
             traceback.print_exc()
             logger.error(f' (unlock) WebDriverException: {e}')
     else:
-        # logger.debug(f" (unlock) на другой странице: {current_url}")
         return False
 
 def enter_password(driver, password):
@@ -118,6 +110,7 @@ def enter_password(driver, password):
         logger.error(f' (enter_password) Ошибка при вводе пароля: {e}')
         return False
 
+
 def click_unlock_button(driver):
     try:
         unlock_button = driver.find_element(By.CSS_SELECTOR, '[data-testid="unlock-submit"]')
@@ -129,22 +122,39 @@ def click_unlock_button(driver):
         logger.error(f" (click_unlock_button) Exception")
         return False
 
-def check_password_error(driver):
-    try:
-        # Ожидаем появления ввода неправильного пароля.
-        logger.debug(" (check_password_error) Проверяем наличие правильного пароля...")
-        error_message = WebDriverWait(driver, 4).until(
-            EC.presence_of_element_located((By.ID, "password-helper-text"))
-        )
-        # Проверяем текст ошибки
-        logger.debug(f' (check_password_error) answer msg: {error_message.text}')
-        if error_message.text:
-            logger.debug(" (check_password_error) Обнаружен неправильный пароль!")
-            return True
 
-    except Exception:
-        logger.error(" (check_password_error) Ошибки пароля нет, продолжаем как обычно.")
+def check_page_url(driver, url='chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#' ):
+    time.sleep(2)
+    driver.implicitly_wait(10)
+    # Получаем текущий URL
+    current_url = driver.current_url
+    if current_url == url:
+        logger.debug(f' (check_page_url), current_url True: {current_url}')
+        return True
+    else:
+        logger.debug(f' (check_page_url), current_url False: {current_url}')
         return False
+
+
+
+def check_password_error(driver):
+    if check_page_url(driver):
+        return True
+    else:
+        try:
+            # Ожидаем появления ввода неправильного пароля.
+            logger.debug(" (check_password_error) Проверяем наличие правильного пароля...")
+            error_message = WebDriverWait(driver, 4).until(
+                EC.presence_of_element_located((By.ID, "password-helper-text"))
+            )
+            # Проверяем текст ошибки
+            logger.debug(f' (check_password_error) answer msg: {error_message.text}')
+            if error_message.text:
+                logger.debug(" (check_password_error) Обнаружен неправильный пароль!")
+                return False
+        except Exception:
+            logger.error(" (check_password_error) Exception.")
+
 
 def click_forgot_password(driver):
     try:
@@ -160,7 +170,7 @@ def click_forgot_password(driver):
         return False
 
 def handle_incorrect_password(driver):
-    if check_password_error(driver):
+    if not check_password_error(driver):
         logger.debug(" (handle_incorrect_password) Ошибка пароля обнаружена, нажимаем [Forgot password?]...")
         if click_forgot_password(driver):
             logger.debug(" (handle_incorrect_password) Нажата кнопка [Forgot password?] успешно.")
@@ -266,23 +276,23 @@ def delete_others_windows(driver):
     driver.switch_to.window(current_window)
 
 def get_started(driver, env_id):
-    current_url = driver.current_url
-    # logger.info(f" (get_started), Current URL: {current_url}")
-    if current_url != 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#onboarding/welcome':
-        logger.info(" (get_started), on page: Let's get started")
+
+    if check_page_url(driver, url='chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#onboarding/welcome'):
+        logger.debug(" (get_started), on page: Let's get started")
         delete_others_windows(driver)
         driver.refresh()
-    try:
-        path_class = 'onboarding-welcome'
-        if WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, path_class))):
-            logger.info(" (get_started) onboarding-welcome page. Let's get started...")
-            return True
-    except NoSuchElementException as e:
-        traceback.print_exc()
-        logger.error(f" (get_started) NoSuchElementException: {e}")
-    except WebDriverException as e:
-        traceback.print_exc()
-        logger.error(f' (get_started) WebDriverException: {e}')
+
+        try:
+            path_class = 'onboarding-welcome'
+            if WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, path_class))):
+                logger.info(" (get_started) onboarding-welcome page. Let's get started...")
+                return True
+        except NoSuchElementException as e:
+            traceback.print_exc()
+            logger.error(f" (get_started) NoSuchElementException: {e}")
+        except WebDriverException as e:
+            traceback.print_exc()
+            logger.error(f' (get_started) WebDriverException: {e}')
 
 def onboard_page(driver, seed, password):  # Import exist wallet
     def agree_checkbox(driver):
@@ -490,30 +500,23 @@ def starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_
     open_tab(driver, 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#unlock')
     logger.debug(' (starting_metamask) open_metamask_tab opened')
     if unlock(driver):
-        logger.info(' (starting_metamask), (unlock), unlock True ')
+        logger.info(' (starting_metamask), (unlock), Welcome back! ')
         enter_password(driver, password)
-        logger.info(' (starting_metamask), (unlock), enter_password entered')
+        logger.debug(' (starting_metamask), (unlock), enter_password entered')
         click_unlock_button(driver)
-        logger.info(' (starting_metamask), (unlock), click_unlock_button clicked')
-
-        time.sleep(2)
-        # Получаем текущий URL
-        current_url = driver.current_url
-        logger.debug(f"Current URL: {current_url}")
-        if current_url == 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#':
-            logger.info(' (starting_metamask), (unlock), Successfully unlocked metamask!')
-            pop_up_window_close(driver)
+        logger.debug(' (starting_metamask), (unlock), click_unlock_button clicked')
+        if check_page_url(driver):
             return True
         else:
             if handle_incorrect_password(driver):
-                logger.info(' (starting_metamask), (unlock), handle_incorrect_password True')
+                logger.info(' (starting_metamask), (unlock), handle_incorrect_password True\n'
+                            'Пароль не верный, авторизация будет через восстановление кошелька, используя сид фразу и пароль из базы данных!')
                 input_seed_phrase_and_password_restore_vault(driver, seed, password)
                 logger.info(' (starting_metamask), (unlock), (handle_incorrect_password), '
-                            '(input_seed_phrase_and_password_restore_vault), entered')
-                pop_up_window_close(driver)
+                            '(input_seed_phrase_and_password_restore_vault),\n'
+                            'Авторизация успешна, сид фраза и новый пароля успешно введены!')
                 return True
             else:
-                pop_up_window_close(driver)
                 return True
     elif get_started(driver, env_id):
         logger.info(' (starting_metamask), (get_started) True')
@@ -522,7 +525,10 @@ def starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_
         pop_up_window_close(driver)
         return True
 
+
+
 def pop_up_window_close(driver):
+    driver.implicitly_wait(3)
     try:
         # Проверка наличия всплывающего окна
         popup = driver.find_element(By.CLASS_NAME, "popover-wrap")
@@ -535,6 +541,7 @@ def pop_up_window_close(driver):
 
 def meta_mask(driver, seed, password, env_id, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH):
     if starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH):
+        pop_up_window_close(driver)
         version_mm(driver)
 
         return check_mm_data_base(driver, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH)
