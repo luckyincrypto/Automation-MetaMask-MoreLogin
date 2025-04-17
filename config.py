@@ -1,5 +1,4 @@
 import traceback
-
 import yaml
 import os
 from logger_setup import setup_logging

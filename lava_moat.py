@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 
 from config import path_local_cashe, logger
 
@@ -10,6 +11,7 @@ def modify_file_runtimelavamoat(env_id):
     # logger.debug(f" (modify_file_runtimelavamoat) MetaMask's list of versions: {os.listdir(file_path_for_version_mm)}")
 
     while True:
+        counter = 0
         try:
             if len(os.listdir(file_path_for_version_mm)) > 0:
                 version_mm_latest = os.listdir(file_path_for_version_mm)[-1]
@@ -17,8 +19,11 @@ def modify_file_runtimelavamoat(env_id):
                     f" (modify_file_runtimelavamoat) Последняя установленная версия MetaMask: {version_mm_latest}")
                 break
         except FileNotFoundError:
-            logger.error('Проверте путь к директории локального кэша path_local_cashe в config.yaml файле. Путь указан не верно!')
-            sys.exit(1)  # Завершение программы с кодом ошибки 1
+            if counter >= 6:
+                logger.error('Проверте путь к директории локального кэша path_local_cashe в config.yaml файле. Путь указан не верно!')
+                sys.exit(1)  # Завершение программы с кодом ошибки 1
+            counter += 1
+            time.sleep(5)
 
     file_path = os.path.join(
         '{}/chrome_{}/Default/Extensions/nkbihfbeogaeaoehlefnkodbefgpgknn/{}/scripts/runtime-lavamoat.js'

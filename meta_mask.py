@@ -79,7 +79,7 @@ def unlock(driver):
             path_css_selector = f'[data-testid={data_testid}]'
             # Ожидание видимости элемента
             logger.debug(f' (unlock) Waiting for unlock-page')
-            if WebDriverWait(driver, 10).until(
+            if WebDriverWait(driver, 15).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, path_css_selector))
             ):
                 # phrase = element.text
