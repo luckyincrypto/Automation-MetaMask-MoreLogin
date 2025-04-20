@@ -161,7 +161,6 @@ def get_user_input():
         print("Профиль будет закрыт после завершения работы скрипта.\n")
     else:
         print("Профиль останется открытым после завершения работы скрипта.\n")
-    time.sleep(0.5)
     while True:
         try:
             # print(f"С какого аккаунта начать, No: \n")
@@ -177,7 +176,7 @@ def get_user_input():
 
     logger.info(
         f"Запуск профилей от {start_account} до {end_account}.")
-    time.sleep(1)
+    time.sleep(0.2)
 
     mix_profiles = 'no'
     delay_from_to = []
@@ -221,7 +220,6 @@ async def operationEnv(driver, seed, env_id, password, mm_address, worksheet_mm,
     """Основная операция."""
     try:
         logger.debug(f" (operationEnv) STEP 2 <<< Запуск Env ID: {env_id} Основная операция >>>")
-        time.sleep(3)
         driver.refresh()
         driver.maximize_window()
         await asyncio.sleep(1)

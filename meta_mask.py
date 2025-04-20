@@ -79,7 +79,7 @@ def unlock(driver):
             path_css_selector = f'[data-testid={data_testid}]'
             # Ожидание видимости элемента
             logger.debug(f' (unlock) Waiting for unlock-page')
-            if WebDriverWait(driver, 15).until(
+            if WebDriverWait(driver, 35).until(
                 EC.visibility_of_element_located((By.CSS_SELECTOR, path_css_selector))
             ):
                 # phrase = element.text
@@ -124,9 +124,8 @@ def click_unlock_button(driver):
 
 
 def check_page_url(driver, url='chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#' ):
-    time.sleep(2)
-    driver.implicitly_wait(10)
     # Получаем текущий URL
+    time.sleep(3)
     current_url = driver.current_url
     if current_url == url:
         logger.debug(f' (check_page_url), current_url True: {current_url}')
@@ -271,20 +270,17 @@ def delete_others_windows(driver):
     for window in windows:
         if window != current_window:
             driver.switch_to.window(window)
-            time.sleep(1)
             driver.close()
     driver.switch_to.window(current_window)
 
 def get_started(driver, env_id):
-
     if check_page_url(driver, url='chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#onboarding/welcome'):
         logger.debug(" (get_started), on page: Let's get started")
         delete_others_windows(driver)
         driver.refresh()
-
         try:
             path_class = 'onboarding-welcome'
-            if WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CLASS_NAME, path_class))):
+            if WebDriverWait(driver, 35).until(EC.visibility_of_element_located((By.CLASS_NAME, path_class))):
                 logger.info(" (get_started) onboarding-welcome page. Let's get started...")
                 return True
         except NoSuchElementException as e:
@@ -495,16 +491,19 @@ def onboard_page(driver, seed, password):  # Import exist wallet
 
     onboarding_create_password(driver, password)
 
-def starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH):
+
+def starting_metamask(driver, seed, password, env_id):
     delete_others_windows(driver)
     open_tab(driver, 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#unlock')
-    logger.debug(' (starting_metamask) open_metamask_tab opened')
+    logger.debug(' (starting_metamask) open_tab: unlock opened')
+
     if unlock(driver):
         logger.info(' (starting_metamask), (unlock), Welcome back! ')
         enter_password(driver, password)
         logger.debug(' (starting_metamask), (unlock), enter_password entered')
         click_unlock_button(driver)
         logger.debug(' (starting_metamask), (unlock), click_unlock_button clicked')
+        pop_up_window_close(driver)
         if check_page_url(driver):
             return True
         else:
@@ -515,8 +514,10 @@ def starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_
                 logger.info(' (starting_metamask), (unlock), (handle_incorrect_password), '
                             '(input_seed_phrase_and_password_restore_vault),\n'
                             'Авторизация успешна, сид фраза и новый пароля успешно введены!')
+                pop_up_window_close(driver)
                 return True
             else:
+                pop_up_window_close(driver)
                 return True
     elif get_started(driver, env_id):
         logger.info(' (starting_metamask), (get_started) True')
@@ -540,10 +541,8 @@ def pop_up_window_close(driver):
 
 
 def meta_mask(driver, seed, password, env_id, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH):
-    if starting_metamask(driver, seed, password, env_id, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH):
-        pop_up_window_close(driver)
+    if starting_metamask(driver, seed, password, env_id):
         version_mm(driver)
-
         return check_mm_data_base(driver, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH)
 
 
