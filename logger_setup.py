@@ -11,12 +11,24 @@ LOG_COLORS = {
     'WARNING': 'yellow',
     'ERROR': 'red',
     'CRITICAL': 'bold_red',
+    'UPDATE': 'blue',  # Добавляем цвет для нового уровня
 }
 
 LOG_LEVEL_CONSOLE = logging.DEBUG
 LOG_LEVEL_FILE = logging.WARNING
 
 logger = None
+
+# Добавляем кастомный уровень UPDATE
+UPDATE_LEVEL = 25
+logging.addLevelName(UPDATE_LEVEL, "UPDATE")
+
+def update(self, message, *args, **kwargs):
+    if self.isEnabledFor(UPDATE_LEVEL):
+        self._log(UPDATE_LEVEL, message, args, **kwargs)
+
+# Добавляем метод в класс Logger
+logging.Logger.update = update
 
 def setup_logging(log_level="DEBUG"):
     global logger
