@@ -300,9 +300,9 @@ async def operationEnv(
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
             # open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
-            # open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
-            # open_tab(driver, "https://morkie.xyz/id")
-            # open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
+            open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
+            open_tab(driver, "https://morkie.xyz/id")
+            open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
 
             # project_1(driver)  # для примера только
             # project_2(driver)  # для примера только
@@ -386,7 +386,7 @@ async def main_flow(
                 delete_others_windows(driver)
                 await restart_browser_profile(env_id, unique_id, env_name, count)
             else:
-                delete_others_windows(driver)
+                # delete_others_windows(driver)
                 break
     except Exception as e:
         logger.error(
@@ -396,7 +396,7 @@ async def main_flow(
     finally:
         # Завершаем профиль корректно
         if mode_close_profile_or_not.lower() == "y":
-            # delete_others_windows(driver)
+            delete_others_windows(driver)
             driver.quit()
             await BrowserManager.stop_browser_profile(env_id)
 

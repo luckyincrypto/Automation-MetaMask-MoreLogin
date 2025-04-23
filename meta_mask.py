@@ -737,6 +737,7 @@ def meta_mask(
 ):
     if starting_metamask(driver, seed, password, env_id):
         version_mm(driver)
+        pop_up_window_close(driver)
         return check_mm_data_base(
             driver, mm_address, row, workbook_mm, worksheet_mm, FILE_PATH
         )

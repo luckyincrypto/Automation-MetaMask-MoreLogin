@@ -20,7 +20,7 @@ def modify_file_runtimelavamoat(env_id):
                 version_mm_latest = os.listdir(file_path_for_version_mm)[-1]
                 elapsed_time = time.time() - start_time  # Вычисляем затраченное время
 
-                logger.update(
+                logger.info(
                     f" (modify_file_runtimelavamoat) Time spent: {elapsed_time:.2f} sec for Cycles: {counter},\n"
                     f"Последняя установленная версия MetaMask: {version_mm_latest} из {os.listdir(file_path_for_version_mm)}"
                 )

@@ -10,4 +10,4 @@ BASEURL: http://127.0.0.1:40000
 # INFO - Отображение всех сообщений кроме отладочных (DEBUG)
 # WARNING - Отображение всех сообщений кроме отладочных и информационных (DEBUG, INFO)
 # ERROR - Отображение всех сообщений кроме отладочных, информационных и предупреждающих (DEBUG, INFO, WARNING)
-LOG_LEVEL: DEBUG  # DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL: INFO  # DEBUG, INFO, WARNING, ERROR

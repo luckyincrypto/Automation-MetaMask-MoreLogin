@@ -1,4 +1,6 @@
 import logging
+import sys
+
 import colorlog
 
 # Константы для форматов логирования
@@ -39,7 +41,7 @@ def setup_logging(log_level="DEBUG"):
         # Проверка наличия обработчиков
         if not logger.hasHandlers():
             # Настройка обработчика консоли
-            console_handler = colorlog.StreamHandler()
+            console_handler = colorlog.StreamHandler(sys.stdout)
             console_handler.setLevel(
                 getattr(logging, log_level.upper(), logging.DEBUG))  # Установка уровня из параметра
             console_formatter = colorlog.ColoredFormatter(LOG_FORMAT_CONSOLE, log_colors=LOG_COLORS)
@@ -47,7 +49,7 @@ def setup_logging(log_level="DEBUG"):
             logger.addHandler(console_handler)
 
             # Настройка обработчика файла
-            file_handler = logging.FileHandler('app.log')
+            file_handler = logging.FileHandler('app.log', encoding="utf-8")
             file_handler.setLevel(LOG_LEVEL_FILE)
             file_formatter = logging.Formatter(LOG_FORMAT_FILE)
             file_handler.setFormatter(file_formatter)

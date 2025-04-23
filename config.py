@@ -20,7 +20,7 @@ def load_yaml_config(FILE_PATH):
     :param file_path: Путь до YAML-файла.
     :return: Словарь с загруженной конфигурацией.
     """
-    with open(FILE_PATH, "r") as file_config_yaml:
+    with open(FILE_PATH, "r", encoding="utf-8") as file_config_yaml:
         try:
             config = yaml.safe_load(file_config_yaml)
             # print(f" (load_yaml_config), Конфигурация успешно загружена из {FILE_PATH}, формат Windows")
