@@ -248,7 +248,7 @@ pip install -r requirements.txt
 - **[Git](https://git-scm.com/) установленный на компьютер.**
 - **Антидетект браузер: [MoreLogin](https://www.morelogin.com/?from=AANRkwFFphIV)** является самым безопасным, наиболее подходящим для работы в команде и предлагает наилучшую экономическую эффективность.
 - **Расширение [MetaMask в Chrome Store](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn) установленное в MoreLogin.**  
-
+- **[Build Tools for Visual Studio 2022](https://aka.ms/vs/17/release/vs_BuildTools.exe) выбирать при установке "Decktop development with C++". **
 <p align="right"><a href="#-содержание" style="font-size:x-small;">⬆️ Вернуться к содержанию</a></p>
 
 ---
