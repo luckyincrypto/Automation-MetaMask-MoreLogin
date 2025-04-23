@@ -85,7 +85,7 @@ pip install -r requirements.txt
 ````
 
 #### Если возникает ошибка при установках зависимостей, то необходимо с сайта https://visualstudio.microsoft.com/downloads/ 
-загрузить "Build Tools for Visual Studio 2022" и при установки Visual Studio Installer выбрать (поставить галачку) "Decktop development with C++"
+#### загрузить "Build Tools for Visual Studio 2022" и при установки в Visual Studio Installer выбрать (поставить галочку) "Decktop development with C++" и нажать кнопку установить.
 
 <p align="right"><a href="#-содержание" style="font-size:x-small;">⬆️ Вернуться к содержанию</a></p>
 
