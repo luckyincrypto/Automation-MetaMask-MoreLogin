@@ -198,3 +198,4 @@ cython_debug/
 
 app.log
 DB.xlsx
+DB_my.xlsx

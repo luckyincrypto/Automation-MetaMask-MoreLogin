@@ -61,20 +61,31 @@
 
 - Далее выполните команду для создания виртуального окружения:
     ```bash
-    python -m venv venv
+    python -m venv .venv
     ```
     В ответ увидите просто строку PS D:\test\Automation-MetaMask-MoreLogin>
-    Внутри директории проекта вы увидите папку с виртуальным окружением venv
+    Внутри директории проекта вы увидите папку с виртуальным окружением .venv
 
 - Активируем виртуальное окружение командой:
+      
+    - Для Windows (CMD/Powershell):
+  
+        ```bash
+        .venv\Scripts\activate
+        ```
+      
+    - Для Windows (Git Bash):
+  
+        ```bash
+        source .venv/Scripts/activate
+        ```
+      
     - Для Linux/Mac:
+  
         ```bash
-        source venv/bin/activate
+        source .venv/bin/activate
         ```
-    - Для Windows:
-        ```bash
-        venv\Scripts\activate
-        ```
+      
     Вы увидите сообщение: (.venv) PS D:\test\Automation-MetaMask-MoreLogin> 
 
     Виртуальное окружение активировано.
@@ -85,7 +96,8 @@ pip install -r requirements.txt
 ````
 
 #### Если возникает ошибка при установках зависимостей, то необходимо с сайта https://visualstudio.microsoft.com/downloads/ 
-#### загрузить "Build Tools for Visual Studio 2022" и при установки в Visual Studio Installer выбрать (поставить галочку) "Decktop development with C++" и нажать кнопку установить.
+#### загрузить "[Build Tools for Visual Studio 2022](https://aka.ms/vs/17/release/vs_BuildTools.exe)" и при установки в Visual Studio Installer выбрать (поставить галочку) "Decktop development with C++" и нажать кнопку установить.
+
 
 <p align="right"><a href="#-содержание" style="font-size:x-small;">⬆️ Вернуться к содержанию</a></p>
 
@@ -207,7 +219,7 @@ pip install -r requirements.txt
 
       Находимся в корне проекта в директории Automation-MetaMask-MoreLogin.
 
-  2. Активируем виртуальное окружение, введя команду:
+  2. Активируем виртуальное окружение для Windows (CMD/Powershell), введя команду:
 
       ```bash
         .\.venv\Scripts\Activate
@@ -225,7 +237,7 @@ pip install -r requirements.txt
       Скрипт запускается и далее выбираем предложенные опции.
 
 - #### 2й вариант из IDE ([Pycharm](https://www.jetbrains.com/pycharm/) или [VS Code](https://code.visualstudio.com/))
-     **run 'main'** Shift+F10 в Pycharm
+     **в Pycharm отрываем файл main.py, нажимаем правой кнопкой мыши и выбираем run 'main' или Ctrl+Shift+F10 **
 
 ### 2️⃣ Логирование процессов в проекте
 #### Во всех файлах проекта используется логирование, которое предоставляет детальную информацию о каждом этапе выполнения скриптов. Это помогает анализировать выполнение процессов и выявлять возможные ошибки.
@@ -233,6 +245,7 @@ pip install -r requirements.txt
 #### Поддерживаемые уровни логирования:
 - DEBUG — отображает все служебные сообщения (наиболее подробный уровень).
 - INFO — выводит только ключевые сообщения о процессе работы.
+- UPDATE - Выводит информацию об обновлении Базы данных или в файле runtime-lavamoat.js (пользовательский уровень).
 - WARNING — показывает предупреждения, игнорируя вспомогательную информацию.
 - ERROR — отображает только ошибки, без лишних технических подробностей.
 - CRITICAL — фиксирует только критические ошибки, требующие срочного вмешательства.
