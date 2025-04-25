@@ -267,7 +267,7 @@ pip install -r requirements.txt
 ---
 
 ## 📖 Источники информации
-- [Официальный сайт MoreLogin](https://www.morelogin.com/?from=AANRkwFFphIV)
+- [Официальный сайт MoreLogin](https://www.morelogin.com/register/?from=CRYPTORELAX)
 - [Документация MoreLogin](https://support.morelogin.com/en/articles/10204806-browser-profile)
 - [MoreLogin-API-Demos на GitHub](https://github.com/MoreLoginBrowser/MoreLogin-API-Demos) – использован модуль `base_func_morelogin.py`
 - [Документация Selenium](https://www.selenium.dev/documentation/webdriver/)
