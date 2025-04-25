@@ -259,7 +259,7 @@ pip install -r requirements.txt
 - **[Python 3.13](https://www.python.org/downloads/release/python-3130/)** версии 3.8 или выше (используемая версия: 3.13)   
 - **IDE:** [Pycharm](https://www.jetbrains.com/pycharm/) или [VS Code](https://code.visualstudio.com/)
 - **[Git](https://git-scm.com/) установленный на компьютер.**
-- **Антидетект браузер: [MoreLogin](https://www.morelogin.com/?from=AANRkwFFphIV)** является самым безопасным, наиболее подходящим для работы в команде и предлагает наилучшую экономическую эффективность.
+- **Антидетект браузер: [MoreLogin](https://www.morelogin.com/register/?from=CRYPTORELAX)** является самым безопасным, наиболее подходящим для работы в команде и предлагает наилучшую экономическую эффективность.
 - **Расширение [MetaMask в Chrome Store](https://chromewebstore.google.com/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn) установленное в MoreLogin.**  
 - **[Build Tools for Visual Studio 2022](https://aka.ms/vs/17/release/vs_BuildTools.exe) выбирать при установке "Decktop development with C++". **
 <p align="right"><a href="#-содержание" style="font-size:x-small;">⬆️ Вернуться к содержанию</a></p>
