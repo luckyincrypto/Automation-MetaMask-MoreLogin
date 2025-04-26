@@ -22,6 +22,7 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 # Локальные модули
 from base_func_morelogin import requestHeader, postRequest
 from config import BASEURL, logger
+from faucet_morkie.faucet_morkie import claim_mon_btn
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import meta_mask, delete_others_windows, open_tab
 from create_mm_wallet import create_wallet
@@ -301,7 +302,9 @@ async def operationEnv(
 
             open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
             open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
-            # open_tab(driver, "https://morkie.xyz/id")
+            result = claim_mon_btn(driver, mm_address)
+            print(f'result: {result}')
+            # open_tab(driver, "https://faucet.morkie.xyz/monad")
             # open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
 
             # project_1(driver)  # для примера только
