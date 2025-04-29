@@ -22,7 +22,7 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 # Локальные модули
 from base_func_morelogin import requestHeader, postRequest
 from config import BASEURL, logger
-from faucet_morkie.faucet_morkie import claim_mon_Faucet_Portal
+from faucet_morkie.faucet_morkie import morkie_xyz
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import meta_mask, delete_others_windows, open_tab
 from create_mm_wallet import create_wallet
@@ -301,7 +301,7 @@ async def operationEnv(
 
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
-            result = claim_mon_Faucet_Portal(driver, mm_address)
+            result = morkie_xyz(driver, mm_address)
             print(f'Result of Monad Faucet Portal : {result}')
             open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
             open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
@@ -367,7 +367,7 @@ async def main_flow(
                 await restart_browser_profile(env_id, unique_id, env_name, count)
             # Логирование запуска профиля
             logger.warning(
-                f"\n{"#" * 20} (main_flow) SCRIPT STARTED Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} {"#" * 20}"
+                f"\n{"#" * 20} (main_flow) SCRIPT STARTED Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} {"#" * 20}\n"
             )
             # Создание драйвера
             driver = await BrowserManager.create_web_driver(debug_url, driver_path)
@@ -492,7 +492,7 @@ async def main():
         logger.debug(
             f"\n (main) PROFILE INFO, №: {count_profile} from {len(profiles)}, "
             f"Acc ID: {unique_id}, EnvName: {env_name}, MetaMask address: {mm_address}, Seed: {seed}, "
-            f"Password: {password}, Private_key: {private_key}, Row: {row}, Start: {start_time}"
+            f"Password: {password}, Private_key: {private_key}, Row: {row}, Start: {start_time}\n"
         )
         # Основной рабочий процесс
         await main_flow(
@@ -510,7 +510,7 @@ async def main():
         profile_duration = datetime.now() - start_time
         logger.warning(
             f"\n{"#" * 20} (main_flow) SCRIPT ENDED Profile №: {unique_id}, Env_Name: {env_name}, "
-            f"Env ID: {env_id}, time spent: {profile_duration} {"#" * 20}"
+            f"Env ID: {env_id}, time spent: {profile_duration} {"#" * 20}\n"
         )
         # Задержка между профилями
         if delay_from_to and count_profile != len(profiles):
@@ -520,7 +520,7 @@ async def main():
     # Итоги работы скрипта
     total_duration = datetime.now() - script_start_time
     logger.warning(
-        f" (main) FINISH. Total time duration spent all profiles: {total_duration}, total profiles: {count_profile}\n{"-" * 90}\n"
+        f"\n (main) FINISH. Total time duration spent all profiles: {total_duration}, total profiles: {count_profile}\n{"-" * 90}\n"
     )
 
 
