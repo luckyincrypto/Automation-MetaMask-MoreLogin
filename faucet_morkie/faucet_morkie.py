@@ -120,12 +120,18 @@ def click_safely(element, retry_count=3, delay=1):
         except ElementClickInterceptedException:
             if attempt < retry_count - 1:
                 time.sleep(delay)
+                # Continue to the next attempt instead of returning None
+                continue
             else:
                 logger.debug(f"Button click intercepted after {retry_count} attempts")
                 return False
         except Exception as e:
             logger.debug(f"Error clicking element: {e}")
             return False
+
+    # This line should never be reached with the current logic,
+    # but it's good practice to have a default return
+    return False
 
 
 def input_eth_address(driver, mm_address):
