@@ -5,22 +5,19 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from config import logger
 from meta_mask import open_tab
+import random
 
-# Константы с описательными именами
+# Constants with descriptive names
 MAX_RETRIES = 5
 BASE_RETRY_DELAY = 3
 FAUCET_URL = "https://faucet.morkie.xyz/monad"
 MORKIE_ID_URL = "https://morkie.xyz/id"
 
-# Шаблоны сообщений для проверки различных состояний
+# Message patterns for checking various states
 MESSAGE_PATTERNS = {
-    "success": {
-        "xpath": "/html/body/section/div/div/section[1]/div/div[2]/p",
-        "text": "Success! Check your wallet."
-    },
     "transaction": {
         "xpath": "/html/body/section/div/div/section[1]/div/p[3]",
-        "contains": "Transaction"  # Частичное совпадение
+        "contains": "Transaction"  # Partial match
     },
     "require_morkie_id": {
         "xpath": "/html/body/section/div/div/section[1]/div/p[2]",
@@ -33,8 +30,30 @@ MESSAGE_PATTERNS = {
     "failed": {
         "xpath": "/html/body/section/div/div/section[1]/div/p[2]",
         "text": "Transaction failed. Please try again later."
+    },
+    "success": {
+        "xpath": "//p[contains(text(), 'Success!')]",
+        "contains": "Success!"
     }
 }
+
+
+def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
+    """
+    Calculate delay with exponential backoff and random jitter.
+
+    Args:
+        retry_count: Current retry number
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+
+    Returns:
+        Delay time in seconds
+    """
+    delay = min(base_delay * (2 ** retry_count), max_delay)
+    # Add jitter (±20%)
+    jitter = random.uniform(0.8, 1.2)
+    return delay * jitter
 
 
 def wait_for_element(driver, by, selector, timeout=10, check_visibility=True):
@@ -120,7 +139,6 @@ def click_safely(element, retry_count=3, delay=1):
         except ElementClickInterceptedException:
             if attempt < retry_count - 1:
                 time.sleep(delay)
-                # Continue to the next attempt instead of returning None
                 continue
             else:
                 logger.debug(f"Button click intercepted after {retry_count} attempts")
@@ -129,8 +147,6 @@ def click_safely(element, retry_count=3, delay=1):
             logger.debug(f"Error clicking element: {e}")
             return False
 
-    # This line should never be reached with the current logic,
-    # but it's good practice to have a default return
     return False
 
 
@@ -149,6 +165,7 @@ def input_eth_address(driver, mm_address):
         # Try multiple selector strategies for better resilience
         selectors = [
             "//input[@placeholder='EVM Address']",
+            "//input[@placeholder='Enter your wallet address']",
             "//input[contains(@placeholder, 'Address')]",
             "//div[contains(@class, 'address-input')]//input"
         ]
@@ -168,206 +185,229 @@ def input_eth_address(driver, mm_address):
         return False
 
 
-def check_success_message_combo(driver):
+def check_message_patterns(driver, wait_time=5):
     """
-    Проверяет комбинацию сообщений об успехе и транзакции.
+    Check for various message patterns and determine result status.
 
     Args:
-        driver: Экземпляр Selenium WebDriver
+        driver: WebDriver instance
+        wait_time: Time to wait for messages to appear
 
     Returns:
-        Текст сообщения об успехе, если найдено, иначе None
+        dict: Result with status and additional information
     """
-    # Сначала проверяем сообщение об успехе
-    success_pattern = MESSAGE_PATTERNS["success"]
-    success_element = wait_for_element(driver, By.XPATH, success_pattern["xpath"], timeout=5)
+    result = {"status": "unknown", "message": None}
 
-    if success_element and success_element.text == success_pattern["text"]:
-        # Если нашли успех, проверяем наличие информации о транзакции
-        transaction_pattern = MESSAGE_PATTERNS["transaction"]
-        transaction_element = find_element_safely(driver, By.XPATH, transaction_pattern["xpath"])
+    try:
+        # Wait briefly for any message to appear
+        time.sleep(1)
 
-        if transaction_element and transaction_pattern["contains"] in transaction_element.text:
-            logger.debug(f"Найдена комбинация сообщений об успехе и транзакции: '{success_element.text}'")
-            return success_element.text
+        # Check for transaction element first (success case)
+        for pattern_name in ["transaction", "success"]:
+            pattern = MESSAGE_PATTERNS.get(pattern_name)
+            if not pattern:
+                continue
+
+            try:
+                element = WebDriverWait(driver, wait_time).until(
+                    EC.presence_of_element_located((By.XPATH, pattern["xpath"]))
+                )
+
+                # If it's a transaction pattern, try to extract hash
+                if pattern_name == "transaction" and "Transaction" in element.text:
+                    # Find the link element which should be a child
+                    try:
+                        link_element = element.find_element(By.TAG_NAME, "a")
+                        transaction_hash = link_element.get_attribute("title")
+
+                        if transaction_hash:
+                            return {
+                                "status": "success",
+                                "message": "Transaction successful",
+                                "transaction_hash": transaction_hash
+                            }
+                    except:
+                        # Even if we can't find the link, a transaction message is good news
+                        return {
+                            "status": "probable_success",
+                            "message": element.text
+                        }
+                # For success message
+                elif pattern_name == "success" and "Success" in element.text:
+                    return {
+                        "status": "success",
+                        "message": element.text
+                    }
+            except:
+                # Skip to next pattern if this one isn't found
+                continue
+
+        # If we don't find a success pattern, check for error patterns
+        for pattern_name in ["require_morkie_id", "limit_reached", "failed"]:
+            pattern = MESSAGE_PATTERNS.get(pattern_name)
+            if not pattern:
+                continue
+
+            try:
+                element = WebDriverWait(driver, 1).until(
+                    EC.presence_of_element_located((By.XPATH, pattern["xpath"]))
+                )
+
+                element_text = element.text
+
+                # Check for exact text match
+                if "text" in pattern and element_text == pattern["text"]:
+                    return {
+                        "status": pattern_name,
+                        "message": element_text
+                    }
+
+                # Check for starts_with match
+                if "starts_with" in pattern and element_text.startswith(pattern["starts_with"]):
+                    return {
+                        "status": pattern_name,
+                        "message": element_text
+                    }
+
+                # Check for contains match
+                if "contains" in pattern and pattern["contains"] in element_text:
+                    return {
+                        "status": pattern_name,
+                        "message": element_text
+                    }
+            except:
+                # Skip to next pattern if this one isn't found
+                continue
+
+    except Exception as e:
+        logger.debug(f"Error checking message patterns: {e}")
+        result["message"] = str(e)
+
+    return result
+
+
+def extract_transaction_hash(driver, wait_time=10):
+    """
+    Try multiple approaches to find the transaction hash.
+
+    Args:
+        driver: WebDriver instance
+        wait_time: Maximum time to wait for the transaction element
+
+    Returns:
+        str or None: Transaction hash if found, None otherwise
+    """
+    # List of XPath patterns to try
+    transaction_patterns = [
+        # Primary pattern from MESSAGE_PATTERNS
+        MESSAGE_PATTERNS["transaction"]["xpath"] + "/a",
+        # Alternate pattern based on HTML structure
+        "//p[contains(text(), 'Transaction:')]/a",
+        # More general pattern
+        "//a[contains(@href, 'socialscan.io/tx/')]"
+    ]
+
+    try:
+        # Wait for transaction information to appear (up to wait_time seconds)
+        WebDriverWait(driver, wait_time).until(
+            EC.presence_of_element_located((By.XPATH, "//p[contains(text(), 'Transaction:')]"))
+        )
+
+        # Try each pattern
+        for xpath in transaction_patterns:
+            try:
+                link_element = driver.find_element(By.XPATH, xpath)
+                transaction_hash = link_element.get_attribute("title")
+                if transaction_hash:
+                    logger.debug(f"Found transaction hash: {transaction_hash}")
+                    return transaction_hash
+            except:
+                continue
+
+    except TimeoutException:
+        logger.debug(f"Transaction element not found after {wait_time} seconds")
+    except Exception as e:
+        logger.debug(f"Error extracting transaction hash: {e}")
+
+    return None
+
+
+def claim_mon_token(driver, wallet_address):
+    """
+    Process for claiming MON token with complete message handling.
+
+    Args:
+        driver: WebDriver instance
+        wallet_address: Ethereum wallet address to receive tokens
+
+    Returns:
+        dict: Result containing status, message, and transaction hash if successful
+    """
+    try:
+        # Open the faucet page
+        driver.get(FAUCET_URL)
+        logger.debug(f"Opened tab: {FAUCET_URL}")
+
+        # Wait for page to load
+        time.sleep(2)
+
+        # Find and click the Claim $MON button
+        claim_button = find_button_by_text(driver, 'Claim $MON')
+        if click_safely(claim_button):
+            logger.debug("Claim $MON button successfully clicked")
         else:
-            logger.debug(f"Найдено сообщение об успехе, но без информации о транзакции: '{success_element.text}'")
-            return success_element.text
+            return {"status": "error", "message": "Failed to click Claim button"}
 
-    return None
+        # Enter the wallet address
+        if not input_eth_address(driver, wallet_address):
+            return {"status": "error", "message": "Failed to enter wallet address"}
 
+        # Find and click the Send button
+        send_button = find_button_by_text(driver, 'Send')
+        if click_safely(send_button):
+            logger.debug("Send button successfully clicked")
+        else:
+            return {"status": "error", "message": "Failed to click Send button"}
 
-def check_message(driver, message_type):
-    """
-    Проверяет наличие различных типов сообщений на странице.
+        # Wait a moment for the result to appear
+        time.sleep(3)
 
-    Args:
-        driver: Экземпляр Selenium WebDriver
-        message_type: Тип сообщения для проверки
+        # Check all message patterns first
+        result = check_message_patterns(driver)
 
-    Returns:
-        Текст сообщения, если найдено, иначе None
-    """
-    # Специальная обработка для типа "success", которая также проверяет "transaction"
-    if message_type == "success":
-        return check_success_message_combo(driver)
+        # If the status is success but we don't have a hash yet, try to extract it
+        if result["status"] in ["success", "probable_success", "transaction"] and "transaction_hash" not in result:
+            transaction_hash = extract_transaction_hash(driver)
+            if transaction_hash:
+                result["transaction_hash"] = transaction_hash
 
-    if message_type not in MESSAGE_PATTERNS:
-        logger.debug(f"Неизвестный тип сообщения: {message_type}")
-        return None
+        # Add wallet address to result for database storage
+        result["wallet_address"] = wallet_address
 
-    pattern = MESSAGE_PATTERNS[message_type]
-    element = wait_for_element(driver, By.XPATH, pattern["xpath"], timeout=5)
+        return result
 
-    if not element:
-        return None
-
-    message_text = element.text
-
-    # Применяем различные стратегии сопоставления в зависимости от типа шаблона
-    if "text" in pattern and message_text == pattern["text"]:
-        logger.debug(f"Точное совпадение для {message_type}: '{message_text}'")
-        return message_text
-    elif "contains" in pattern and pattern["contains"] in message_text:
-        logger.debug(f"Частичное совпадение для {message_type}: '{message_text}'")
-        return message_text
-    elif "starts_with" in pattern and message_text.startswith(pattern["starts_with"]):
-        logger.debug(f"Совпадение по префиксу для {message_type}: '{message_text}'")
-        return message_text
-
-    logger.debug(
-        f"Элемент сообщения найден, но содержимое не соответствует шаблону для {message_type}: '{message_text}'")
-    return None
-
-
-def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
-    """
-    Calculate delay with exponential backoff and random jitter.
-
-    Args:
-        retry_count: Current retry number
-        base_delay: Base delay in seconds
-        max_delay: Maximum delay in seconds
-
-    Returns:
-        Delay time in seconds
-    """
-    import random
-    delay = min(base_delay * (2 ** retry_count), max_delay)
-    # Add jitter (±20%)
-    jitter = random.uniform(0.8, 1.2)
-    return delay * jitter
-
-
-def claim_mon_faucet(driver, mm_address):
-    """
-    Основная функция для получения токенов $MON с фаусета.
-
-    Args:
-        driver: Экземпляр Selenium WebDriver
-        mm_address: Ethereum-адрес для получения токенов
-
-    Returns:
-        Сообщение о результате при успехе, None в противном случае
-    """
-    logger.debug(f"Начинаем процесс получения токенов для адреса: {mm_address}")
-    open_tab(driver, FAUCET_URL)
-
-    # Начальное ожидание загрузки страницы
-    time.sleep(2)
-
-    retry_count = 0
-    while retry_count < MAX_RETRIES:
-        try:
-            # Обновляем страницу только при повторных попытках (не при первой)
-            if retry_count > 0:
-                logger.debug(f"Повторная попытка {retry_count}/{MAX_RETRIES}")
-                driver.refresh()
-                time.sleep(2)
-
-            # Шаг 1: Находим и нажимаем кнопку "Claim $MON" с использованием find_button_by_text
-            claim_button = find_button_by_text(driver, "Claim $MON")
-            if not claim_button or not click_safely(claim_button):
-                logger.debug("Не удалось найти или нажать кнопку Claim $MON")
-                retry_count += 1
-                time.sleep(exponential_backoff(retry_count))
-                continue
-            logger.debug("Кнопка Claim $MON успешно нажата")
-
-            # Шаг 2: Вводим ETH-адрес
-            time.sleep(1)  # Короткое ожидание появления поля ввода
-            if not input_eth_address(driver, mm_address):
-                logger.debug("Не удалось ввести ETH-адрес")
-                retry_count += 1
-                time.sleep(exponential_backoff(retry_count))
-                continue
-
-            # Шаг 3: Находим и нажимаем кнопку Send с использованием find_button_by_text
-            send_button = find_button_by_text(driver, "Send")
-            if not send_button or not click_safely(send_button):
-                logger.debug("Не удалось найти или нажать кнопку Send")
-                retry_count += 1
-                time.sleep(exponential_backoff(retry_count))
-                continue
-            logger.debug("Кнопка Send успешно нажата")
-
-            # Шаг 4: Проверяем различные типы сообщений
-            time.sleep(2)  # Ожидание сообщения о результате
-
-            # Сначала проверяем комбинацию успеха, потом остальные сообщения
-            # Приоритетный порядок проверки сообщений
-            result = check_message(driver, "success")
-            if result:
-                logger.debug(f"Найдено сообщение об успехе: {result}")
-                return result
-
-            message_types = ["require_morkie_id", "limit_reached", "failed"]
-
-            for msg_type in message_types:
-                result = check_message(driver, msg_type)
-                if result:
-                    logger.debug(f"Найден тип сообщения '{msg_type}': {result}")
-                    return result
-
-            # Если не найдено распознаваемых сообщений
-            logger.debug("Не найдено распознаваемых сообщений, повторяем попытку...")
-            retry_count += 1
-            time.sleep(exponential_backoff(retry_count))
-
-        except Exception as e:
-            logger.debug(f"Неожиданная ошибка в процессе получения токенов: {e}")
-            retry_count += 1
-            time.sleep(exponential_backoff(retry_count))
-
-    logger.debug(f"Достигнуто максимальное количество попыток ({MAX_RETRIES}) без успеха")
-    return None
+    except Exception as e:
+        logger.debug(f"Error in claim_mon_token: {e}")
+        return {"status": "error", "message": str(e), "wallet_address": wallet_address}
 
 
 def morkie_xyz(driver, mm_address):
     """
-    Основная функция-обертка для обработки процесса получения токенов из фаусета Morkie.
+    Main wrapper function for processing the token retrieval from Morkie faucet.
 
     Args:
-        driver: Экземпляр Selenium WebDriver
-        mm_address: Ethereum-адрес для получения токенов
+        driver: Selenium WebDriver instance
+        mm_address: Ethereum address to receive tokens
 
     Returns:
-        Результат процесса получения токенов
+        dict: Result of the token retrieval process
     """
-    result = claim_mon_faucet(driver, mm_address)
+    result = claim_mon_token(driver, mm_address)
 
-    # Если требуется Morkie ID, перенаправляем на страницу создания ID
-    if result == 'You need a Morkie ID to claim faucet.':
-        logger.debug("Требуется Morkie ID. Перенаправляем на страницу создания ID...")
+    # Check if we need to handle special cases based on the result
+    if result["status"] == "require_morkie_id":
+        logger.debug("Morkie ID required. Redirecting to ID creation page...")
         open_tab(driver, MORKIE_ID_URL)
-        return {"status": "requires_morkie_id", "message": result}
+        return result
 
-    # Обрабатываем другие случаи результатов
-    if result and "Success" in result:
-        return {"status": "success", "message": result}
-    elif result and "limit reached" in result:
-        return {"status": "limit_reached", "message": result}
-    elif result and "Transaction" in result:
-        return {"status": "transaction_in_progress", "message": result}
-    else:
-        return {"status": "failed", "message": result or "Произошла неизвестная ошибка"}
+    return result
