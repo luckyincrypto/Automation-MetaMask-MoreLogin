@@ -40,22 +40,22 @@ MESSAGE_PATTERNS = {
 }
 
 
-def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
-    """
-    Calculate delay with exponential backoff and random jitter.
-
-    Args:
-        retry_count: Current retry number
-        base_delay: Base delay in seconds
-        max_delay: Maximum delay in seconds
-
-    Returns:
-        Delay time in seconds
-    """
-    delay = min(base_delay * (2 ** retry_count), max_delay)
-    # Add jitter (±20%)
-    jitter = random.uniform(0.8, 1.2)
-    return delay * jitter
+# def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
+#     """
+#     Calculate delay with exponential backoff and random jitter.
+#
+#     Args:
+#         retry_count: Current retry number
+#         base_delay: Base delay in seconds
+#         max_delay: Maximum delay in seconds
+#
+#     Returns:
+#         Delay time in seconds
+#     """
+#     delay = min(base_delay * (2 ** retry_count), max_delay)
+#     # Add jitter (±20%)
+#     jitter = random.uniform(0.8, 1.2)
+#     return delay * jitter
 
 def input_eth_address(driver, mm_address):
     """
