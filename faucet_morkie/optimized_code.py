@@ -40,72 +40,41 @@ MESSAGE_PATTERNS = {
 }
 
 
-def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
-    """
-    Calculate delay with exponential backoff and random jitter.
-
-    Args:
-        retry_count: Current retry number
-        base_delay: Base delay in seconds
-        max_delay: Maximum delay in seconds
-
-    Returns:
-        Delay time in seconds
-    """
-    delay = min(base_delay * (2 ** retry_count), max_delay)
-    # Add jitter (±20%)
-    jitter = random.uniform(0.8, 1.2)
-    return delay * jitter
-
-
-# def wait_for_element(driver, by, selector, timeout=10, check_visibility=True):
-#     """
-#     Wait for an element to be present/visible on the page and return it.
-#
-#     Args:
-#         driver: Selenium WebDriver instance
-#         by: By method to locate element
-#         selector: Selector string
-#         timeout: Maximum wait time in seconds
-#         check_visibility: Whether to wait for visibility or just presence
-#
-#     Returns:
-#         WebElement if found, None otherwise
-#     """
-#     try:
-#         wait = WebDriverWait(driver, timeout)
-#         condition = EC.visibility_of_element_located if check_visibility else EC.presence_of_element_located
-#         element = wait.until(condition((by, selector)))
-#         return element
-#     except TimeoutException:
-#         logger.debug(f"Element '{selector}' not found after {timeout} seconds")
-#         return None
-
-
-# def find_element_safely(driver, by, selector):
+# def find_element_safely(driver, by, selector, timeout=10):
 #     """
 #     Find an element safely without raising exceptions.
+#     If timeout > 0, will wait for the element to appear, otherwise checks immediately.
 #
 #     Args:
 #         driver: Selenium WebDriver instance
 #         by: By method to locate element
 #         selector: Selector string
+#         timeout: Time to wait for element (seconds)
 #
 #     Returns:
 #         WebElement if found, None otherwise
 #     """
 #     try:
-#         return driver.find_element(by, selector)
-#     except NoSuchElementException:
-#         logger.debug(f"Element '{selector}' not found")
+#         if timeout > 0:
+#             # Use WebDriverWait if timeout is specified
+#             wait = WebDriverWait(driver, timeout)
+#             return wait.until(EC.presence_of_element_located((by, selector)))
+#         else:
+#             # Immediate check without waiting
+#             return driver.find_element(by, selector)
+#     except (NoSuchElementException, TimeoutException):
+#         logger.debug(f"Element '{selector}' not found after {timeout} seconds")
 #         return None
 #     except Exception as e:
 #         logger.debug(f"Error finding element '{selector}': {e}")
 #         return None
-
-
-# def find_button_by_text(driver, text):
+#
+#
+# def find_button_by_text(driver, text, timeout=10):
 #     """
+#      the expression is universal and can be used in any Selenium code to find buttons by text content
+#      without needing to modify the XPath.
+#
 #     Find a button containing the specified text.
 #
 #     Args:
@@ -115,32 +84,42 @@ def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
 #     Returns:
 #         Button WebElement if found, None otherwise
 #     """
-#     xpath = f"//button[contains(text(), '{text}')]"
-#     return find_element_safely(driver, By.XPATH, xpath)
+#     if not text or text.strip() == "":
+#         logger.debug("Empty text provided for button search")
+#         return None
+#
+#     xpath = f"//button[contains(normalize-space(text()), '{text}')]"
+#     return find_element_safely(driver, By.XPATH, xpath, timeout=timeout)
 
 
-# def click_safely(element, retry_count=3, delay=1):
+# def click_safely(element, retry_count=3, base_delay=1, jitter_range=(0.8, 1.2), exp_factor=2):
 #     """
-#     Attempt to click an element safely, with retries.
+#     Attempt to click an element safely, with exponential backoff retries.
 #
 #     Args:
 #         element: WebElement to click
 #         retry_count: Number of retries if click fails
-#         delay: Delay between retries in seconds
+#         base_delay: Base delay between retries in seconds
 #
 #     Returns:
 #         True if click succeeded, False otherwise
 #     """
 #     if not element:
+#         logger.error("Element is None, cannot click")
 #         return False
 #
 #     for attempt in range(retry_count):
 #         try:
 #             element.click()
+#             logger.debug(f"Element clicked successfully on attempt {attempt + 1}")
 #             return True
 #         except ElementClickInterceptedException:
 #             if attempt < retry_count - 1:
-#                 time.sleep(delay)
+#                 # Use exponential backoff for increasing delays between retries
+#                 retry_delay = base_delay * (exp_factor ** attempt)
+#                 # Add some random jitter (±20%)
+#                 jitter = random.uniform(*jitter_range)
+#                 time.sleep(retry_delay * jitter)
 #                 continue
 #             else:
 #                 logger.debug(f"Button click intercepted after {retry_count} attempts")
@@ -150,6 +129,8 @@ def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
 #             return False
 #
 #     return False
+
+
 
 
 def input_eth_address(driver, mm_address):
@@ -207,14 +188,12 @@ def check_message_patterns(driver, wait_time=5):
         # Check for transaction element first (success case)
         for pattern_name in ["transaction", "success"]:
             pattern = MESSAGE_PATTERNS.get(pattern_name)
-            print(f"pattern: {pattern}")
             if not pattern:
                 continue
 
             try:
-                element = WebDriverWait(driver, wait_time).until(
-                    EC.presence_of_element_located((By.XPATH, pattern["xpath"]))
-                )
+                # Using find_element_safely with timeout instead of direct WebDriverWait
+                element = SeleniumUtilities.find_element_safely(driver, By.XPATH, pattern["xpath"], timeout=wait_time)
 
                 # If it's a transaction pattern, try to extract hash
                 if pattern_name == "transaction" and "Transaction" in element.text:
@@ -252,9 +231,7 @@ def check_message_patterns(driver, wait_time=5):
                 continue
 
             try:
-                element = WebDriverWait(driver, 1).until(
-                    EC.presence_of_element_located((By.XPATH, pattern["xpath"]))
-                )
+                element = SeleniumUtilities.find_element_safely(driver, By.XPATH, pattern["xpath"], timeout=1)
 
                 element_text = element.text
 
@@ -312,9 +289,7 @@ def extract_transaction_hash(driver, wait_time=10):
 
     try:
         # Wait for transaction information to appear (up to wait_time seconds)
-        WebDriverWait(driver, wait_time).until(
-            EC.presence_of_element_located((By.XPATH, "//p[contains(text(), 'Transaction:')]"))
-        )
+        SeleniumUtilities.find_element_safely(driver, By.XPATH, "//p[contains(text(), 'Transaction:')]", timeout=wait_time)
 
         # Try each pattern
         for xpath in transaction_patterns:
@@ -335,47 +310,75 @@ def extract_transaction_hash(driver, wait_time=10):
     return None
 
 
-def claim_mon_token(driver, wallet_address):
+def claim_mon_token(driver, wallet_address, max_retries=MAX_RETRIES):
     """
     Process for claiming MON token with complete message handling.
+    Implements retry logic with exponential backoff.
 
     Args:
         driver: WebDriver instance
         wallet_address: Ethereum wallet address to receive tokens
+        max_retries: Maximum number of retry attempts
 
     Returns:
         dict: Result containing status, message, and transaction hash if successful
     """
     try:
-        # Open the faucet page
-        driver.get(FAUCET_URL)
-        logger.debug(f"Opened tab: {FAUCET_URL}")
+        for retry in range(max_retries):
+            try:
+                # Open the faucet page
+                driver.get(FAUCET_URL)
+                logger.debug(f"Opened tab: {FAUCET_URL}")
 
-        # Wait for page to load
-        time.sleep(2)
+                # Find and click the Claim $MON button (with timeout)
+                claim_button = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
 
-        # Find and click the Claim $MON button
-        claim_button = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
-        if SeleniumUtilities.click_safely(claim_button):
-        # if click_safely(claim_button):
-            logger.debug("Claim $MON button successfully clicked")
-        else:
-            return {"status": "error", "message": "Failed to click Claim button"}
+                if SeleniumUtilities.click_safely(claim_button):
+                    logger.debug("Claim $MON button successfully clicked")
+                else:
+                    logger.debug(f"Failed to click Claim button, attempt {retry + 1}/{max_retries}")
+                    if retry < max_retries - 1:
+                        # Calculate backoff delay for next retry
+                        delay = (2 ** retry) * BASE_RETRY_DELAY * random.uniform(0.8, 1.2)
+                        time.sleep(delay)
+                        continue
+                    return {"status": "error", "message": "Failed to click Claim button after multiple attempts"}
 
-        # Enter the wallet address
-        if not input_eth_address(driver, wallet_address):
-            return {"status": "error", "message": "Failed to enter wallet address"}
+                # Enter the wallet address
+                if not input_eth_address(driver, wallet_address):
+                    logger.debug(f"Failed to enter wallet address, attempt {retry + 1}/{max_retries}")
+                    if retry < max_retries - 1:
+                        delay = (2 ** retry) * BASE_RETRY_DELAY * random.uniform(0.8, 1.2)
+                        time.sleep(delay)
+                        continue
+                    return {"status": "error", "message": "Failed to enter wallet address after multiple attempts"}
 
-        # Find and click the Send button
-        send_button = SeleniumUtilities.find_button_by_text(driver, 'Send')
-        # send_button = find_button_by_text(driver, 'Send')
-        if SeleniumUtilities.click_safely(send_button):
-        # if click_safely(send_button):
-            logger.debug("Send button successfully clicked")
-        else:
-            return {"status": "error", "message": "Failed to click Send button"}
+                # Find and click the Send button
+                send_button = SeleniumUtilities.find_button_by_text(driver, 'Send')
 
-        # Wait a moment for the result to appear
+                if SeleniumUtilities.click_safely(send_button):
+                    logger.debug("Send button successfully clicked")
+                else:
+                    logger.debug(f"Failed to click Send button, attempt {retry + 1}/{max_retries}")
+                    if retry < max_retries - 1:
+                        delay = (2 ** retry) * BASE_RETRY_DELAY * random.uniform(0.8, 1.2)
+                        time.sleep(delay)
+                        continue
+                    return {"status": "error", "message": "Failed to click Send button after multiple attempts"}
+
+                # Success if we get here - no need to continue retry loop
+                break
+
+            except Exception as e:
+                logger.debug(f"Error during claim attempt {retry + 1}: {e}")
+                if retry < max_retries - 1:
+                    delay = (2 ** retry) * BASE_RETRY_DELAY * random.uniform(0.8, 1.2)
+                    time.sleep(delay)
+                    continue
+                return {"status": "error", "message": f"Error after {max_retries} attempts: {str(e)}",
+                        "wallet_address": wallet_address}
+
+        # After successful button clicks, wait for result
         time.sleep(3)
 
         # Check all message patterns first

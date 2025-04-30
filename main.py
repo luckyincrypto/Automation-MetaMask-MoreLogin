@@ -22,7 +22,8 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 # Локальные модули
 from base_func_morelogin import requestHeader, postRequest
 from config import BASEURL, logger
-from faucet_morkie.faucet_morkie import morkie_xyz
+from faucet_morkie.optimized_code import morkie_xyz
+# from faucet_morkie.faucet_morkie import morkie_xyz
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import meta_mask, delete_others_windows, open_tab
 from create_mm_wallet import create_wallet
