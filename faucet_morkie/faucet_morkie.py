@@ -1,6 +1,6 @@
 import time
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException
+from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 
@@ -56,101 +56,6 @@ def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
     # Add jitter (±20%)
     jitter = random.uniform(0.8, 1.2)
     return delay * jitter
-
-
-# def wait_for_element(driver, by, selector, timeout=10, check_visibility=True):
-#     """
-#     Wait for an element to be present/visible on the page and return it.
-#
-#     Args:
-#         driver: Selenium WebDriver instance
-#         by: By method to locate element
-#         selector: Selector string
-#         timeout: Maximum wait time in seconds
-#         check_visibility: Whether to wait for visibility or just presence
-#
-#     Returns:
-#         WebElement if found, None otherwise
-#     """
-#     try:
-#         wait = WebDriverWait(driver, timeout)
-#         condition = EC.visibility_of_element_located if check_visibility else EC.presence_of_element_located
-#         element = wait.until(condition((by, selector)))
-#         return element
-#     except TimeoutException:
-#         logger.debug(f"Element '{selector}' not found after {timeout} seconds")
-#         return None
-
-
-# def find_element_safely(driver, by, selector):
-#     """
-#     Find an element safely without raising exceptions.
-#
-#     Args:
-#         driver: Selenium WebDriver instance
-#         by: By method to locate element
-#         selector: Selector string
-#
-#     Returns:
-#         WebElement if found, None otherwise
-#     """
-#     try:
-#         return driver.find_element(by, selector)
-#     except NoSuchElementException:
-#         logger.debug(f"Element '{selector}' not found")
-#         return None
-#     except Exception as e:
-#         logger.debug(f"Error finding element '{selector}': {e}")
-#         return None
-
-
-# def find_button_by_text(driver, text):
-#     """
-#     Find a button containing the specified text.
-#
-#     Args:
-#         driver: Selenium WebDriver instance
-#         text: Text to search for in button
-#
-#     Returns:
-#         Button WebElement if found, None otherwise
-#     """
-#     xpath = f"//button[contains(text(), '{text}')]"
-#     return find_element_safely(driver, By.XPATH, xpath)
-
-
-# def click_safely(element, retry_count=3, delay=1):
-#     """
-#     Attempt to click an element safely, with retries.
-#
-#     Args:
-#         element: WebElement to click
-#         retry_count: Number of retries if click fails
-#         delay: Delay between retries in seconds
-#
-#     Returns:
-#         True if click succeeded, False otherwise
-#     """
-#     if not element:
-#         return False
-#
-#     for attempt in range(retry_count):
-#         try:
-#             element.click()
-#             return True
-#         except ElementClickInterceptedException:
-#             if attempt < retry_count - 1:
-#                 time.sleep(delay)
-#                 continue
-#             else:
-#                 logger.debug(f"Button click intercepted after {retry_count} attempts")
-#                 return False
-#         except Exception as e:
-#             logger.debug(f"Error clicking element: {e}")
-#             return False
-#
-#     return False
-
 
 def input_eth_address(driver, mm_address):
     """
