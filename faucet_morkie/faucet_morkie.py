@@ -40,22 +40,22 @@ MESSAGE_PATTERNS = {
 }
 
 
-# def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
-#     """
-#     Calculate delay with exponential backoff and random jitter.
-#
-#     Args:
-#         retry_count: Current retry number
-#         base_delay: Base delay in seconds
-#         max_delay: Maximum delay in seconds
-#
-#     Returns:
-#         Delay time in seconds
-#     """
-#     delay = min(base_delay * (2 ** retry_count), max_delay)
-#     # Add jitter (±20%)
-#     jitter = random.uniform(0.8, 1.2)
-#     return delay * jitter
+def exponential_backoff(retry_count, base_delay=BASE_RETRY_DELAY, max_delay=60):
+    """
+    Calculate delay with exponential backoff and random jitter.
+
+    Args:
+        retry_count: Current retry number
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+
+    Returns:
+        Delay time in seconds
+    """
+    delay = min(base_delay * (2 ** retry_count), max_delay)
+    # Add jitter (±20%)
+    jitter = random.uniform(0.8, 1.2)
+    return delay * jitter
 
 def input_eth_address(driver, mm_address):
     """
@@ -251,55 +251,71 @@ def claim_mon_token(driver, wallet_address):
     Returns:
         dict: Result containing status, message, and transaction hash if successful
     """
-    try:
-        # Open the faucet page
-        driver.get(FAUCET_URL)
-        logger.debug(f"Opened tab: {FAUCET_URL}")
+    # Open the faucet page
+    driver.get(FAUCET_URL)
+    logger.debug(f"Opened tab: {FAUCET_URL}")
+    # Начальное ожидание загрузки страницы
+    time.sleep(2)
 
-        # Wait for page to load
-        time.sleep(2)
+    retry_count = 0
+    while retry_count < MAX_RETRIES:
+        try:
+            if retry_count > 0:
+                logger.debug(f"Повторная попытка {retry_count}/{MAX_RETRIES}")
+                driver.refresh()
+                time.sleep(2)
 
-        # Find and click the Claim $MON button
-        claim_button = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
-        if SeleniumUtilities.click_safely(claim_button):
-        # if click_safely(claim_button):
-            logger.debug("Claim $MON button successfully clicked")
-        else:
-            return {"status": "error", "message": "Failed to click Claim button"}
+            # Find and click the Claim $MON button
+            claim_button = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
+            if SeleniumUtilities.click_safely(claim_button):
+                logger.debug("Claim $MON button successfully clicked")
+            else:
+                logger.debug("Не удалось найти или нажать кнопку Claim $MON")
+                retry_count += 1
+                time.sleep(exponential_backoff(retry_count))
+                continue
 
-        # Enter the wallet address
-        if not input_eth_address(driver, wallet_address):
-            return {"status": "error", "message": "Failed to enter wallet address"}
+            # Enter the wallet address
+            time.sleep(1)  # Короткое ожидание появления поля ввода
+            if not input_eth_address(driver, wallet_address):
+                logger.debug("Не удалось ввести ETH-адрес")
+                retry_count += 1
+                time.sleep(exponential_backoff(retry_count))
+                continue
 
-        # Find and click the Send button
-        send_button = SeleniumUtilities.find_button_by_text(driver, 'Send')
-        # send_button = find_button_by_text(driver, 'Send')
-        if SeleniumUtilities.click_safely(send_button):
-        # if click_safely(send_button):
-            logger.debug("Send button successfully clicked")
-        else:
-            return {"status": "error", "message": "Failed to click Send button"}
+            # Find and click the Send button
+            send_button = SeleniumUtilities.find_button_by_text(driver, 'Send')
+            if SeleniumUtilities.click_safely(send_button):
+                logger.debug("Send button successfully clicked")
+            else:
+                logger.debug("Не удалось найти или нажать кнопку Send")
+                retry_count += 1
+                time.sleep(exponential_backoff(retry_count))
+                continue
 
-        # Wait a moment for the result to appear
-        time.sleep(3)
+            # Wait a moment for the result to appear
+            time.sleep(3)
 
-        # Check all message patterns first
-        result = check_message_patterns(driver)
+            # Check all message patterns first
+            result = check_message_patterns(driver)
 
-        # If the status is success, but we don't have a hash yet, try to extract it
-        if result["status"] in ["success", "probable_success", "transaction"] and "transaction_hash" not in result:
-            transaction_hash = extract_transaction_hash(driver)
-            if transaction_hash:
-                result["transaction_hash"] = transaction_hash
+            # If the status is success, but we don't have a hash yet, try to extract it
+            if result["status"] in ["success", "probable_success", "transaction"] and "transaction_hash" not in result:
+                transaction_hash = extract_transaction_hash(driver)
+                if transaction_hash:
+                    result["transaction_hash"] = transaction_hash
 
-        # Add wallet address to result for database storage
-        result["wallet_address"] = wallet_address
+            # Add wallet address to result for database storage
+            result["wallet_address"] = wallet_address
 
-        return result
+            return result
 
-    except Exception as e:
-        logger.debug(f"Error in claim_mon_token: {e}")
-        return {"status": "error", "message": str(e), "wallet_address": wallet_address}
+        except Exception as e:
+            logger.debug(f"Error in claim_mon_token: {e}")
+            # Если не найдено распознаваемых сообщений
+            logger.debug("Не найдено распознаваемых сообщений, повторяем попытку...")
+            retry_count += 1
+            time.sleep(exponential_backoff(retry_count))
 
 
 def morkie_xyz(driver, mm_address):
