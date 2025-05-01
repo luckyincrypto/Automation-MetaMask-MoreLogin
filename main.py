@@ -22,8 +22,8 @@ from selenium.common.exceptions import WebDriverException, TimeoutException
 # Локальные модули
 from base_func_morelogin import requestHeader, postRequest
 from config import BASEURL, logger
-from faucet_morkie.optimized_code import morkie_xyz
-# from faucet_morkie.faucet_morkie import morkie_xyz
+# from faucet_morkie.optimized_code import morkie_xyz
+from faucet_morkie.faucet_morkie import morkie_xyz
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import meta_mask, delete_others_windows, open_tab
 from create_mm_wallet import create_wallet
@@ -302,7 +302,7 @@ async def operationEnv(
 
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
-            result = morkie_xyz(driver, mm_address)
+            result = morkie_xyz(driver, wallet_mm_from_browser_extension)
             print(f'Result of Monad Faucet Portal : {result}')
             open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
             open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
