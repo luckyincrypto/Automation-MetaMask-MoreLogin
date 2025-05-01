@@ -335,6 +335,7 @@ def morkie_xyz(driver, mm_address):
     if result["status"] == "require_morkie_id":
         logger.debug("Morkie ID required. Redirecting to ID creation page...")
         open_tab(driver, MORKIE_ID_URL)
+        open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
         return result
 
     return result
