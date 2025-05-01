@@ -2,7 +2,8 @@ import os
 import sys
 import time
 
-from config import path_local_cashe, logger
+from MoreLogin.check_morelogin import metamask_path
+from config import logger
 
 
 # Функция для проверки и изменения содержимого файла
@@ -12,14 +13,10 @@ def modify_file_runtimelavamoat(env_id):
     start_time = time.time()  # Засекаем время начала работы
     while True:
         try:
-            file_path_for_version_mm = os.path.join(
-                f"{path_local_cashe}/chrome_{env_id}/Default/Extensions/nkbihfbeogaeaoehlefnkodbefgpgknn/"
-            )
-
+            file_path_for_version_mm = metamask_path(env_id)
             if len(os.listdir(file_path_for_version_mm)) > 0:
                 version_mm_latest = os.listdir(file_path_for_version_mm)[-1]
                 elapsed_time = time.time() - start_time  # Вычисляем затраченное время
-
                 logger.info(
                     f" (modify_file_runtimelavamoat) Time spent: {elapsed_time:.2f} sec for Cycles: {counter},\n"
                     f"Последняя установленная версия MetaMask: {version_mm_latest} из {os.listdir(file_path_for_version_mm)}"
@@ -44,17 +41,14 @@ def modify_file_runtimelavamoat(env_id):
         counter += 1
         time.sleep(5)
 
-    file_path = os.path.join(
-        f"{path_local_cashe}/chrome_{env_id}/Default/Extensions/nkbihfbeogaeaoehlefnkodbefgpgknn/{version_mm_latest}/scripts/runtime-lavamoat.js"
-    )
-
-    if not os.path.isfile(file_path):
+    file_path_runtime_lavamoat = f'{file_path_for_version_mm}{version_mm_latest}/scripts/runtime-lavamoat.js'
+    if not file_path_runtime_lavamoat:
         logger.error(
-            f" (modify_file_runtimelavamoat) Файл не найден: {file_path}. Выход."
+            f" (modify_file_runtimelavamoat) Файл не найден: {file_path_runtime_lavamoat}. Выход."
         )
         sys.exit(1)  # Завершение программы с кодом ошибки 1
 
-    with open(file_path, "r", encoding="utf-8") as file:
+    with open(file_path_runtime_lavamoat, "r", encoding="utf-8") as file:
         lines = file.readlines()
 
     if (
@@ -65,7 +59,7 @@ def modify_file_runtimelavamoat(env_id):
         # Замена "enabled":true на "enabled":false
         lines[96] = lines[96].replace('"enabled":true', '"enabled":false')
 
-        with open(file_path, "w", encoding="utf-8") as file:
+        with open(file_path_runtime_lavamoat, "w", encoding="utf-8") as file:
             file.writelines(lines)
         logger.update(
             " (modify_file_runtimelavamoat) Изменения в файле runtime-lavamoat.js успешно сохранены."

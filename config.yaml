@@ -1,7 +1,3 @@
-# Берется из MoreLogin, Центр настоек -> Локальные настройки (D:\.MoreLogin\cache)
-# По умолчанию в этой папке хранится кэш временных файлов.
-path_local_cashe: D:\.MoreLogin\cache
-
 # Берется из MoreLogin, Профиль Браузера -> API
 BASEURL: http://127.0.0.1:40000
 

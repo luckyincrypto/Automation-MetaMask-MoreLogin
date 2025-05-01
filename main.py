@@ -303,7 +303,7 @@ async def operationEnv(
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
             result = morkie_xyz(driver, wallet_mm_from_browser_extension)
-            print(f'Result of Monad Faucet Portal : {result}')
+            print(f'Result of: {result}')
             open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
             open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
 

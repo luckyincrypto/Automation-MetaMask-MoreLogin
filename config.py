@@ -43,13 +43,5 @@ logger = setup_logging(
 )  # Передача уровня логирования в setup_logging
 logger.info(f"LOG_LEVEL: %s", LOG_LEVEL)
 
-path_local_cashe = convert_windows_path_to_unix(
-    config_data["path_local_cashe"]
-)  # require for modify_file_runtimelavamoat in file lava_more.py
 BASEURL = config_data["BASEURL"]  # require for BrowserManager in main.py
-
-logger.debug(
-    f"По умолчанию в этой папке хранится кэш временных файлов: "
-    f"{convert_windows_path_to_unix(config_data['path_local_cashe'])}, формат UNIX\n"
-    f"BASEURL = {BASEURL}"
-)
+logger.debug(f"BASEURL = {BASEURL}")

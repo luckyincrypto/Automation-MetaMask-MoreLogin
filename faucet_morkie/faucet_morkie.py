@@ -112,10 +112,8 @@ def check_message_patterns(driver, wait_time=5):
         # Check for transaction element first (success case)
         for pattern_name in ["transaction", "success"]:
             pattern = MESSAGE_PATTERNS.get(pattern_name)
-            print(f"pattern: {pattern}")
             if not pattern:
                 continue
-
             try:
                 element = WebDriverWait(driver, wait_time).until(
                     EC.presence_of_element_located((By.XPATH, pattern["xpath"]))
@@ -329,13 +327,16 @@ def morkie_xyz(driver, mm_address):
     Returns:
         dict: Result of the token retrieval process
     """
-    result = claim_mon_token(driver, mm_address)
+    activity = {}
 
+    result = claim_mon_token(driver, mm_address)
+    activity['Monad_Faucet_Portal'] = result
     # Check if we need to handle special cases based on the result
     if result["status"] == "require_morkie_id":
         logger.debug("Morkie ID required. Redirecting to ID creation page...")
         open_tab(driver, MORKIE_ID_URL)
         open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
-        return result
+        activity['Monad_Faucet_Portal'] = result
+        return activity
 
-    return result
+    return activity
