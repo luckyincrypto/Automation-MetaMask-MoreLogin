@@ -11,118 +11,17 @@ from datetime import datetime
 # Внешние библиотеки
 import asyncio
 import openpyxl
-from environs import Env
 from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException, TimeoutException
+from selenium.common.exceptions import WebDriverException
 
 # Локальные модули
-from base_func_morelogin import requestHeader, postRequest
-from config import BASEURL, logger
-# from faucet_morkie.optimized_code import morkie_xyz
-from faucet_morkie.faucet_morkie import morkie_xyz
+from faucet_morkie.faucet_morkie import MonadFaucet
 from lava_moat import modify_file_runtimelavamoat
-from meta_mask import meta_mask, delete_others_windows, open_tab
+from meta_mask import MetaMaskHelper
 from create_mm_wallet import create_wallet
-
-
-
-# Загрузка переменных окружения
-def setup_environment():
-    if not os.path.exists(".env"):
-        logger.error(
-            "Файл .env не найден. Проверьте, что он существует в корне проекта."
-        )
-    env = Env()
-    env.read_env()
-    return (
-        env.str("APP_ID"),
-        env.str("APP_KEY"),
-        env.str("SECRET_KEY"),
-        env.str("DATA_BASE"),
-        env.str("WORKSHEET_NAME"),
-    )
-
-
-APP_ID, APP_KEY, SECRET_KEY, DATA_BASE, WORKSHEET_NAME = setup_environment()
-
-# Константы
-FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), DATA_BASE)
-
-
-# Класс для управления браузером
-class BrowserManager:
-    @staticmethod
-    async def create_web_driver(debug_url: str, web_driver_path: str):
-        """Инициализация Chrome WebDriver с заданными параметрами"""
-        options = Options()
-        options.add_experimental_option("debuggerAddress", debug_url)
-        service = Service(executable_path=web_driver_path)
-        return webdriver.Chrome(service=service, options=options)
-
-    @staticmethod
-    async def start_browser_profile(env_id: str):
-        """Запуск профиля браузера через API"""
-        try:
-            request_path = f"{BASEURL}/api/env/start"
-            data = {"envId": env_id, "encryptKey": SECRET_KEY}
-            response = postRequest(
-                request_path, data, requestHeader(APP_ID, APP_KEY)
-            ).json()
-            logger.debug(f" (start_browser_profile) START & OPEN PROFILE: {response}")
-            if response["code"] != 0:
-                raise ConnectionError(
-                    f" (start_browser_profile) Ошибка запуска профиля: {response['msg']}"
-                )
-            return (
-                f"127.0.0.1:{response['data']['debugPort']}",
-                response["data"]["webdriver"],
-            )
-        except KeyError as e:
-            logger.critical(
-                f" (start_browser_profile) Error: {e}. Перезапустите программу. Сервер вернул не полный ответ."
-            )
-
-    @staticmethod
-    async def stop_browser_profile(env_id: str):
-        """Завершение работы профиля браузера"""
-        request_path = f"{BASEURL}/api/env/close"
-        data = {"envId": env_id, "encryptKey": SECRET_KEY}
-        response = postRequest(
-            request_path, data, requestHeader(APP_ID, APP_KEY)
-        ).json()
-        logger.debug(f" (stop_browser_profile) STOP & CLOSE PROFILE, Env ID: {env_id}.")
-        return response
-
-    @staticmethod
-    async def get_list_browser_profiles(APP_ID, APP_KEY, BASEURL, unique_id):
-        requestPath = f"{BASEURL}/api/env/page"
-        data = {"pageNo": 1, "pageSize": 100, "envName": "-"}
-        headers = requestHeader(APP_ID, APP_KEY)
-        try:
-            response = postRequest(requestPath, data, headers).json()
-            if response["code"] != 0:
-                logger.error(
-                    f" (get_list_browser_profiles) Error: {response['msg']}\n"
-                    f"Проверьте файл переменных окружения .env:\n"
-                    f" APP_ID, APP_KEY \n"
-                )
-                sys.exit(1)
-            for env in response.get("data", {}).get("dataList", []):
-                if int(env["envName"][2:]) == unique_id:
-                    return str(env["id"]), unique_id, env["envName"]
-        except Exception as e:
-            logger.error(
-                " (get_list_browser_profiles) Profile not found, check conditions.\n"
-                "1. Подключение к интернету\n"
-                "2. Запущенный антидетект браузер MoreLogin\n"
-                "3. Наличие порядковых номеров в Базе Данных (file_DB.xlsx) если файл создан и пустой.\n"
-                "4. В файле config.py должен быть указан корректный BASEURL."
-            )
-            sys.exit(1)
+from config import logger, DATA_BASE_PATH, WORKSHEET_NAME
+from MoreLogin.browser_manager import BrowserManager
 
 
 async def read_user_list_file(
@@ -145,7 +44,7 @@ async def read_user_list_file(
             if password is None and seed:
                 password = create_password()
                 worksheet_mm.cell(row=row + 1, column=2).value = password
-                workbook_mm.save(FILE_PATH)
+                workbook_mm.save(DATA_BASE_PATH)
                 logger.update(
                     f"[NEW PASSWORD] Для профиля № {unique_id} создан новый пароль."
                 )
@@ -158,7 +57,7 @@ async def read_user_list_file(
                 worksheet_mm.cell(row=row + 1, column=3).value = seed
                 worksheet_mm.cell(row=row + 1, column=4).value = mm_address
                 worksheet_mm.cell(row=row + 1, column=5).value = private_key
-                workbook_mm.save(FILE_PATH)
+                workbook_mm.save(DATA_BASE_PATH)
                 logger.update(
                     f"\n[NEW PASSWORD & ETH WALLET ADDRESS] Для профиля № {unique_id}, address: {mm_address} and password\n"
                 )
@@ -273,7 +172,7 @@ def create_password():
 
 
 async def operationEnv(
-    driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row
+    driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, file_path
 ):
     """Основная операция."""
     try:
@@ -283,18 +182,20 @@ async def operationEnv(
         driver.refresh()
         driver.maximize_window()
         await asyncio.sleep(1)
-        delete_others_windows(driver)
+
+        # Используем методы через экземпляр MetaMaskHelper
+        helper = MetaMaskHelper(driver)
+        helper.delete_others_windows()
+
         if modify_file_runtimelavamoat(env_id):
-            wallet_mm_from_browser_extension = meta_mask(
-                driver,
+            wallet_mm_from_browser_extension = helper.meta_mask(
                 seed,
                 password,
-                env_id,
                 mm_address,
                 row,
                 workbook_mm,
                 worksheet_mm,
-                FILE_PATH,
+                file_path,
             )
             logger.debug(
                 f"wallet_mm_from_browser_extension: {wallet_mm_from_browser_extension}, type: {type(wallet_mm_from_browser_extension)}"
@@ -302,10 +203,10 @@ async def operationEnv(
 
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
-            result = morkie_xyz(driver, wallet_mm_from_browser_extension)
+            result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
             print(f'Result of: {result}')
-            open_tab(driver, "https://testnet.monadexplorer.com/address/" + wallet_mm_from_browser_extension)
-            open_tab(driver, "https://debank.com/profile/" + wallet_mm_from_browser_extension)
+            helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
+            helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 
             # open_tab(driver, "https://faucet.morkie.xyz/monad")
             # open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
@@ -326,15 +227,20 @@ async def operationEnv(
         return False
 
 
-async def restart_browser_profile(env_id, unique_id, env_name, count):
+async def restart_browser_profile(driver, env_id, unique_id, env_name, count):
+    """Перезапуск профиля браузера при ошибках"""
     if count > 3:
         logger.critical(
             f"\n{"#" * 20} (main_flow), (operationEnv), Не удачный запуск №: {count}! Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id},"
             f"Env ID: {env_id} будет остановлен и закрыт. {"#" * 20}"
         )
         sys.exit(1)
+
     else:
-        driver.quit()
+        # Закрываем драйвер и останавливаем профиль
+        await asyncio.sleep(5)
+        if driver in globals():
+            driver.quit()
         await BrowserManager.stop_browser_profile(env_id)
         logger.warning(
             f"\n (main_flow), (operationEnv) Не удачный запуск №: {count}! Повторный запуск через 5 секунд! Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id}"
@@ -352,57 +258,52 @@ async def main_flow(
     worksheet_mm,
     workbook_mm,
     row,
+
 ):
     """Основной рабочий процесс для одного профиля."""
-    global driver
+    driver = None
     count = 0
     try:
         while True:
-            if count <= 2:
+            if count <= 3:
                 await asyncio.sleep(5)
             # Запуск профиля
             debug_url, driver_path = await BrowserManager.start_browser_profile(env_id)
             if not debug_url and not driver_path:
                 count += 1
-                delete_others_windows(driver)
-                await restart_browser_profile(env_id, unique_id, env_name, count)
+                # MetaMaskHelper(driver).delete_others_windows()
+                await restart_browser_profile(driver, env_id, unique_id, env_name, count)
             # Логирование запуска профиля
             logger.warning(
                 f"\n{"#" * 20} (main_flow) SCRIPT STARTED Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} {"#" * 20}\n"
             )
             # Создание драйвера
             driver = await BrowserManager.create_web_driver(debug_url, driver_path)
-            # Устанавливаем глобальное время ожидания в 4 секунды
+            # Устанавливаем глобальное время ожидания в 10 секунды
             driver.implicitly_wait(10)
             # Основные операции
             logger.debug(
                 f" (main_flow) STEP 1 <<< Начало работы в Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} >>>"
             )
-            if not await operationEnv(
-                driver,
-                seed,
-                env_id,
-                password,
-                mm_address,
-                worksheet_mm,
-                workbook_mm,
-                row,
+            if await operationEnv(
+                    driver, seed, env_id, password, mm_address,
+                    worksheet_mm, workbook_mm, row, DATA_BASE_PATH
             ):
-                count += 1
-                delete_others_windows(driver)
-                await restart_browser_profile(env_id, unique_id, env_name, count)
-            else:
-                # delete_others_windows(driver)
                 break
+
+            count = await restart_browser_profile(driver, env_id, unique_id, env_name, count)
+
     except Exception as e:
         logger.error(
             f" (main_flow) ERROR in Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id}, Ошибка: {e}"
         )
         traceback.print_exc()
+
     finally:
         # Завершаем профиль корректно
-        if mode_close_profile_or_not.lower() == "y":
-            delete_others_windows(driver)
+        if driver and mode_close_profile_or_not.lower() == "y":
+            close_tabs = MetaMaskHelper(driver)
+            close_tabs.delete_others_windows()
             driver.quit()
             await BrowserManager.stop_browser_profile(env_id)
 
@@ -417,7 +318,7 @@ async def main():
     def workbook_worksheet():
         # код для работы с worksheet_mm здесь
         try:
-            workbook_mm = openpyxl.load_workbook(FILE_PATH)
+            workbook_mm = openpyxl.load_workbook(DATA_BASE_PATH)
             worksheet_mm = workbook_mm[WORKSHEET_NAME]
             logger.debug(
                 f" (workbook_worksheet) DATABASE Рабочий лист базы данных: {worksheet_mm.title}"
@@ -433,7 +334,7 @@ async def main():
             sys.exit(1)  # Завершение программы с кодом ошибки 1
         except InvalidFileException:
             logger.error(
-                f" (workbook_worksheet) Error: Неверный формат файла базы данных: {FILE_PATH}\n"
+                f" (workbook_worksheet) Error: Неверный формат файла базы данных: {DATA_BASE_PATH}\n"
                 f"Проверьте файл переменных окружения .env:\n"
                 f" DATA_BASE \n"
             )
@@ -441,9 +342,9 @@ async def main():
             sys.exit(1)  # Завершение программы с кодом ошибки 1
 
     # Проверка существует ли файл с базой данных DB.xlsx
-    if os.path.exists(FILE_PATH):
+    if os.path.exists(DATA_BASE_PATH):
         # Если файл существует, загружаем его
-        logger.debug(f" (main) DATABASE exists: {FILE_PATH}.")
+        logger.debug(f" (main) DATABASE exists: {DATA_BASE_PATH}.")
         workbook_mm, worksheet_mm = workbook_worksheet()
     else:
         # Если файл не существует, создаем новый файл
@@ -463,8 +364,8 @@ async def main():
             worksheet_mm.cell(
                 row=row, column=1, value=row - 1
             )  # Заполнение первой колонки нумерация от 1 до 100
-        workbook_mm.save(FILE_PATH)  # Сохранение нового файла
-        logger.update(f" (main) DATABASE created new file: {FILE_PATH}.")
+        workbook_mm.save(DATA_BASE_PATH)  # Сохранение нового файла
+        logger.update(f" (main) DATABASE created new file: {DATA_BASE_PATH}.")
         # код для работы с worksheet_mm загружаем его
         workbook_mm, worksheet_mm = workbook_worksheet()
     # Получаем список профилей
@@ -486,9 +387,8 @@ async def main():
         ) = profile
 
         # Получение данных профиля
-        env_id, unique_id, env_name = await BrowserManager.get_list_browser_profiles(
-            APP_ID, APP_KEY, BASEURL, unique_id
-        )
+        env_id, unique_id, env_name = await BrowserManager.get_list_browser_profiles(unique_id)
+
         start_time = datetime.now()
         logger.debug(
             f"\n (main) PROFILE INFO, №: {count_profile} from {len(profiles)}, "

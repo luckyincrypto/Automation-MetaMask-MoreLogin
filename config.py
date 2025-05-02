@@ -1,11 +1,15 @@
+import sys
 import traceback
 import yaml
 import os
+
+from environs import Env
+
 from logger_setup import setup_logging
 
 
 CONFIG_YAML = "config.yaml"  # Название файла конфигурации, в корне проекта
-FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_YAML)
+CONFIG_YAML_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_YAML)
 
 
 # чтобы преобразовать путь из формата Windows в формат UNIX
@@ -13,14 +17,14 @@ def convert_windows_path_to_unix(path):
     return path.replace("\\", "/")
 
 
-def load_yaml_config(FILE_PATH):
+def load_yaml_config(CONFIG_YAML_PATH):
     """
     Функция для загрузки конфигурации из YAML-файла.
 
     :param file_path: Путь до YAML-файла.
     :return: Словарь с загруженной конфигурацией.
     """
-    with open(FILE_PATH, "r", encoding="utf-8") as file_config_yaml:
+    with open(CONFIG_YAML_PATH, "r", encoding="utf-8") as file_config_yaml:
         try:
             config = yaml.safe_load(file_config_yaml)
             # print(f" (load_yaml_config), Конфигурация успешно загружена из {FILE_PATH}, формат Windows")
@@ -31,7 +35,7 @@ def load_yaml_config(FILE_PATH):
             return None
 
 
-config_data = load_yaml_config(FILE_PATH)
+config_data = load_yaml_config(CONFIG_YAML_PATH)
 
 LOG_LEVEL = config_data.get(
     "LOG_LEVEL", "DEBUG"
@@ -43,5 +47,35 @@ logger = setup_logging(
 )  # Передача уровня логирования в setup_logging
 logger.info(f"LOG_LEVEL: %s", LOG_LEVEL)
 
-BASEURL = config_data["BASEURL"]  # require for BrowserManager in main.py
-logger.debug(f"BASEURL = {BASEURL}")
+
+class Config:
+    """Класс для управления конфигурацией приложения"""
+
+    def __init__(self):
+        self.env = self._setup_environment()
+        self.file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                      self.env.str("DATA_BASE"))
+        self.baseurl = self.env.str("BASEURL")
+        self.app_id = self.env.str("APP_ID")
+        self.app_key = self.env.str("APP_KEY")
+        self.secret_key = self.env.str("SECRET_KEY")
+        self.worksheet_name = self.env.str("WORKSHEET_NAME")
+
+    @staticmethod
+    def _setup_environment() -> Env:
+        """Загрузка переменных окружения"""
+        env = Env()
+        if not os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"):
+            logger.error("Файл .env не найден. Проверьте, что он существует в корне проекта.")
+            sys.exit(1)
+        env.read_env()
+        return env
+
+
+config = Config()
+BASEURL = config.baseurl
+SECRET_KEY = config.secret_key
+APP_ID = config.app_id
+APP_KEY = config.app_key
+DATA_BASE_PATH = config.file_path
+WORKSHEET_NAME = config.worksheet_name

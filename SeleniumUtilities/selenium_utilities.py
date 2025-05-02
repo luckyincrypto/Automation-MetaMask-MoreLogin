@@ -18,6 +18,13 @@ class SeleniumUtilities:
     """
 
     @staticmethod
+    def open_tab(self, url):
+        """Открывает новую вкладку."""
+        self.driver.switch_to.new_window()
+        self.driver.get(url)
+        logger.debug(f"(open_tab) Открыта вкладка: {url}")
+
+    @staticmethod
     def find_element_safely(driver, by, selector, timeout=10):
         """
         Найти элемент безопасно, без выброса исключений.
