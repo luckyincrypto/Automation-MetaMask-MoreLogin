@@ -35,7 +35,8 @@ class BrowserManager:
             )
         except KeyError as e:
             logger.critical(f"Сервер вернул неполный ответ: {e}")
-            sys.exit(1)
+            return f"Сервер вернул неполный ответ: {e}"
+
 
     @staticmethod
     async def stop_browser_profile(env_id: str) -> dict:

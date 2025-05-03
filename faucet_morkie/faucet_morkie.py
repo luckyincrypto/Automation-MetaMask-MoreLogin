@@ -190,13 +190,16 @@ class MonadFaucet:
                     logger.debug(f"Attempting to click the 'Send' button: {send_btn.text}")
                     click_success = SeleniumUtilities.click_safely(send_btn)
                     logger.debug(f"Send button click success: {click_success}")
+                    time.sleep(5)
 
                     try:
                         # Check if button text changed
-                        if send_btn.text.strip().lower() == 'send':
-                            logger.debug(f"Button text still: {send_btn.text}")
-                            send_btn.click()  # Try to click Button not changed - repeat click
-                            time.sleep(1)
+                        send_btn_2nd = SeleniumUtilities.find_button_by_text(driver, 'Send')
+                        if send_btn_2nd:
+                            logger.debug(f"Attempting to click the 'Send' button 2nd time: {send_btn.text}")
+                            click_success_2nd = SeleniumUtilities.click_safely(send_btn)
+                            logger.debug(f"Send button click success: {click_success_2nd}")
+                            time.sleep(3)
 
                         # Verify if button disappeared or changed
                         new_send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')

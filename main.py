@@ -93,7 +93,7 @@ def get_user_input():
         'Начало ввода параметров от пользователя.\n Закрыть профиль по окончании?\n Да - "Y", оставить открытым - "Enter"\n'
     )
     mode_close_profile_or_not = input().strip().lower()
-    if mode_close_profile_or_not == "y":
+    if mode_close_profile_or_not.lower() == "y":
         print("Профиль будет закрыт после завершения работы скрипта.\n")
     else:
         print("Профиль останется открытым после завершения работы скрипта.\n")
@@ -208,6 +208,10 @@ async def operationEnv(
             helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
             helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 
+            if row == 1 or row == 7:
+                helper.open_tab("https://app.grass.io/dashboard")
+
+
             # open_tab(driver, "https://faucet.morkie.xyz/monad")
             # open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
 
@@ -261,6 +265,10 @@ async def main_flow(
 
 ):
     """Основной рабочий процесс для одного профиля."""
+    global mode_close_profile_or_not
+    if row == 1 or row == 7:
+        mode_close_profile_or_not = "no"
+
     driver = None
     count = 0
     try:
@@ -285,10 +293,7 @@ async def main_flow(
             logger.debug(
                 f" (main_flow) STEP 1 <<< Начало работы в Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} >>>"
             )
-            if await operationEnv(
-                    driver, seed, env_id, password, mm_address,
-                    worksheet_mm, workbook_mm, row, DATA_BASE_PATH
-            ):
+            if await operationEnv(driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, DATA_BASE_PATH):
                 break
 
             count = await restart_browser_profile(driver, env_id, unique_id, env_name, count)
