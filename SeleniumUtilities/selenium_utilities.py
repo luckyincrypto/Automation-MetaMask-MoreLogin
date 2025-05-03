@@ -1,12 +1,7 @@
 import time
 import random
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import (
-    NoSuchElementException,
-    TimeoutException,
-    ElementClickInterceptedException,
-    WebDriverException,
-)
+from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from config import logger  # Подключение конфигурации логгера
@@ -71,7 +66,7 @@ class SeleniumUtilities:
         for attempt in range(retry_count):
             try:
                 element.click()
-                logger.debug(f"Element clicked successfully on attempt {attempt + 1}")
+                logger.debug(f" (SeleniumUtilities.click_safely), Element clicked successfully on attempt {attempt + 1}")
                 return True
             except ElementClickInterceptedException:
                 if attempt < retry_count - 1:

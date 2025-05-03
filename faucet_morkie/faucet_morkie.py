@@ -175,10 +175,45 @@ class MonadFaucet:
                 if not MonadFaucet.input_eth_address(driver, wallet_address):
                     raise Exception("Address input failed")
 
-                # Handle send button
-                send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                if not send_btn or not SeleniumUtilities.click_safely(send_btn):
-                    raise Exception("Send button interaction failed")
+                # # Handle send button
+                # send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
+                # if not send_btn or not SeleniumUtilities.click_safely(send_btn):
+                #     raise Exception("Send button interaction failed")
+
+                # Handle send button with retries
+                max_send_attempts = 5
+                send_attempt = 0
+                last_exception = None
+
+                while send_attempt < max_send_attempts:
+                    send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
+                    logger.debug(f"Attempting to click the 'Send' button: {send_btn.text}")
+                    click_success = SeleniumUtilities.click_safely(send_btn)
+                    logger.debug(f"Send button click success: {click_success}")
+
+                    try:
+                        # Check if button text changed
+                        if send_btn.text.strip().lower() == 'send':
+                            logger.debug(f"Button text still: {send_btn.text}")
+                            send_btn.click()  # Try to click Button not changed - repeat click
+                            time.sleep(1)
+
+                        # Verify if button disappeared or changed
+                        new_send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
+                        if not new_send_btn or new_send_btn.text.strip().lower() != 'send':
+                            break
+
+                    except Exception as e:
+                        last_exception = e
+                        logger.debug(f"Send button attempt {send_attempt + 1} failed: {str(e)}")
+
+                    send_attempt += 1
+                    time.sleep(1)
+
+                    if send_attempt == max_send_attempts:
+                        raise Exception(
+                            f"Failed to complete Send action after {max_send_attempts} attempts. Last error: {str(last_exception)}")
+
 
                 # Check result with retries
                 result = None
