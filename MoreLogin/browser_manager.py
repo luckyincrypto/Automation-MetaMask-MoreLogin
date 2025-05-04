@@ -35,7 +35,7 @@ class BrowserManager:
             )
         except KeyError as e:
             logger.critical(f"Сервер вернул неполный ответ: {e}")
-            return f"Сервер вернул неполный ответ: {e}"
+            # return f"Сервер вернул неполный ответ: {e}"
 
 
     @staticmethod
