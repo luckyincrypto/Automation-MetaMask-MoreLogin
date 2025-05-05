@@ -1,9 +1,7 @@
-import datetime
 import time
 import random
 import re
 from datetime import datetime, timedelta
-
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
@@ -26,7 +24,7 @@ class MonadFaucet:
 
     @staticmethod
     def input_eth_address(driver, mm_address):
-        """Input Ethereum address using SeleniumUtilities with robust verification."""
+        """Input Ethereum address with verification."""
         selectors = [
             "//input[contains(@placeholder, 'EVM Address')]",
             "//input[contains(@placeholder, 'Enter your EVM Address')]",
@@ -35,216 +33,117 @@ class MonadFaucet:
         ]
 
         for selector in selectors:
-            input_field = SeleniumUtilities.find_element_safely(driver, By.XPATH, selector, timeout=10)
-            if not input_field:
-                continue
+            input_field = SeleniumUtilities.find_element_safely(driver, By.XPATH, selector)
+            if input_field:
+                try:
+                    input_field.clear()
+                    for _ in range(3):
+                        input_field.send_keys(Keys.BACKSPACE)
+                        time.sleep(0.1)
 
-            try:
-                # Clear field thoroughly
-                input_field.click()
-                input_field.clear()
-                for _ in range(3):  # Extra cleanup
-                    input_field.send_keys(Keys.BACKSPACE)
-                    input_field.send_keys(Keys.DELETE)
-                    time.sleep(0.1)
+                    for char in mm_address:
+                        input_field.send_keys(char)
+                        time.sleep(0.05)
 
-                # Type address carefully
-                for char in mm_address:
-                    input_field.send_keys(char)
-                    time.sleep(0.05)
-
-                # Verify input
-                current_value = SeleniumUtilities.find_element_safely(
-                    driver, By.XPATH,
-                    f"{selector}[@value='{mm_address}']"
-                )
-
-                if current_value:
-                    logger.debug(f"Successfully entered ETH address: {mm_address}")
-                    return True
-
-                # Fallback verification
-                current_value = input_field.get_attribute('value')
-                if current_value and current_value.lower() == mm_address.lower():
-                    logger.debug(f"Verified address via get_attribute: {mm_address}")
-                    return True
-
-                logger.warning(f"Address mismatch. Expected: {mm_address}, Got: {current_value}")
-
-            except Exception as e:
-                logger.debug(f"Error with selector {selector}: {str(e)}")
-                continue
-
-        logger.error("Failed to input ETH address after all attempts")
+                    if input_field.get_attribute('value').lower() == mm_address.lower():
+                        return True
+                except Exception as e:
+                    logger.debug(f"Error inputting address: {str(e)}")
         return False
 
     @staticmethod
-    def extract_transaction_hash(driver):
-        """Extract transaction hash using SeleniumUtilities."""
-        patterns = [
-            "//div[contains(@class, 'bg-green-900')]//a[contains(@href, 'socialscan.io/tx/')]",
-            "//a[contains(@href, 'socialscan.io/tx/')]",
-            "//div[contains(text(), 'Transaction:')]//a"
-        ]
-
-        for pattern in patterns:
-            element = SeleniumUtilities.find_element_safely(driver, By.XPATH, pattern)
-            if element:
-                href = element.get_attribute("href")
-                if href and "/tx/" in href:
-                    return href.split("/tx/")[-1]
-                if element.text and len(element.text) >= 10:
-                    return element.text
-        return None
-
-    @staticmethod
     def parse_wait_time(wait_str):
-        """Parse wait time string (e.g. '16h 55m') into timedelta."""
+        """Parse wait time string into timedelta."""
         try:
-            hours = 0
-            minutes = 0
-
-            if 'h' in wait_str:
-                hours = int(re.search(r'(\d+)h', wait_str).group(1))
-            if 'm' in wait_str:
-                minutes = int(re.search(r'(\d+)m', wait_str).group(1))
-
+            hours = int(re.search(r'(\d+)h', wait_str).group(1)) if 'h' in wait_str else 0
+            minutes = int(re.search(r'(\d+)m', wait_str).group(1)) if 'm' in wait_str else 0
             return timedelta(hours=hours, minutes=minutes)
         except Exception as e:
             logger.error(f"Error parsing wait time: {str(e)}")
             return None
 
     @staticmethod
-    def check_result_status(driver):
-        """Check status using only SeleniumUtilities methods."""
-        status_checks = [
-            ("success", "//div[contains(@class, 'bg-green-900') and contains(., 'Success!')]"),
-            ("limit_exceeded", "//div[contains(@class, 'bg-yellow-900') and contains(., 'Claim limit exceeded')]"),
-            ("require_morkie_id", "//p[contains(text(), 'You need a Morkie ID')]"),
-            ("limit_reached", "//p[starts-with(text(), 'Claim limit reached')]"),
-            ("failed", "//p[contains(text(), 'Transaction failed')]"),
-            ("probable_success", "//div[contains(text(), 'Transaction:')]")
-        ]
+    def check_final_status(driver):
+        """Check only final status after sending transaction."""
+        status_patterns = {
+            "limit_exceeded": "//div[contains(@class, 'bg-yellow-900') and contains(., 'Claim limit exceeded')]",
+            "limit_reached": "//p[starts-with(text(), 'Claim limit reached')]",
+            "require_morkie_id": "//p[contains(text(), 'You need a Morkie ID')]",
+            "success": "//div[contains(@class, 'bg-green-900')]//a[contains(@href, 'socialscan.io/tx/')]",
+            "failed": "//p[contains(text(), 'Transaction failed')]"
+        }
 
-        for status, xpath in status_checks:
-            element = SeleniumUtilities.find_element_safely(driver, By.XPATH, xpath)
+        for status, pattern in status_patterns.items():
+            element = SeleniumUtilities.find_element_safely(driver, By.XPATH, pattern, timeout=3)
             if element:
-                result = {"status": status, "message": element.text.strip()}
+                result = {
+                    "status": status,
+                    "message": element.text.strip()
+                }
 
                 if status == "limit_exceeded":
                     wait_match = re.search(r'in (\d+h \d+m)', element.text)
                     if wait_match:
-                        wait_str = wait_match.group(1)
-                        wait_delta = MonadFaucet.parse_wait_time(wait_str)
+                        wait_delta = MonadFaucet.parse_wait_time(wait_match.group(1))
                         if wait_delta:
-                            # Добавляем 3 минуты буфера к времени ожидания
-                            next_claim = datetime.now() + wait_delta + timedelta(minutes=3)
-                            result["next_claim"] = next_claim.strftime("%Y-%m-%d %H:%M:%S")
-                            logger.debug(f"Next claim available at: {result['next_claim']}")
+                            result["next_claim"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
 
-                if status in ("success", "probable_success"):
-                    tx_hash = MonadFaucet.extract_transaction_hash(driver)
-                    if tx_hash:
-                        result["transaction_hash"] = tx_hash
+                if status == "success":
+                    href = element.get_attribute("href")
+                    if href and "/tx/" in href:
+                        result["transaction"] = href.split("/tx/")[-1]
 
                 return result
 
-        return {"status": "unknown", "message": "No status message detected"}
+        return {"status": "unknown"}
 
     @staticmethod
-    def claim_mon_token(driver, wallet_address):
-        """Complete claim process using SeleniumUtilities."""
+    def process_claim(driver, wallet_address):
+        """Optimized claim processing logic."""
         for attempt in range(MAX_RETRIES):
             try:
                 driver.get(FAUCET_URL)
                 time.sleep(2)
 
-                # Pre-check for immediate status
-                # pre_check = MonadFaucet.check_result_status(driver)
-                # if pre_check["status"] != "unknown":
-                #     pre_check["wallet_address"] = wallet_address
-                #     return pre_check
+                # Try to click Claim button if address field not present
+                address_field = SeleniumUtilities.find_element_safely(
+                    driver, By.XPATH,
+                    "//input[contains(@placeholder, 'EVM Address')]",
+                    timeout=3
+                )
 
-                # Handle claim button
-                claim_btn = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
-                if not claim_btn or not SeleniumUtilities.click_safely(claim_btn):
-                    raise Exception("Claim button interaction failed")
+                if not address_field:
+                    claim_btn = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
+                    if claim_btn and SeleniumUtilities.click_safely(claim_btn):
+                        time.sleep(1)
 
                 # Input address
-                time.sleep(1)
                 if not MonadFaucet.input_eth_address(driver, wallet_address):
-                    raise Exception("Address input failed")
+                    raise Exception("Failed to input address")
 
-                # # Handle send button
-                # send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                # if not send_btn or not SeleniumUtilities.click_safely(send_btn):
-                #     raise Exception("Send button interaction failed")
+                # Click Send button
+                send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
+                if not send_btn or not SeleniumUtilities.click_safely(send_btn):
+                    raise Exception("Failed to click Send button")
 
-                # Handle send button with retries
-                max_send_attempts = 5
-                send_attempt = 0
-                last_exception = None
+                # Check final result with short timeout
+                time.sleep(3)
+                status = MonadFaucet.check_final_status(driver)
 
-                while send_attempt < max_send_attempts:
-                    send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                    logger.debug(f"Attempting to click the 'Send' button: {send_btn.text}")
-                    click_success = SeleniumUtilities.click_safely(send_btn)
-                    logger.debug(f"Send button click success: {click_success}")
-                    time.sleep(5)
+                if status["status"] in ["success", "limit_exceeded", "limit_reached", "require_morkie_id"]:
+                    status["wallet_address"] = wallet_address
+                    return status
 
-                    try:
-                        # Check if button text changed
-                        send_btn_2nd = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                        if send_btn_2nd:
-                            logger.debug(f"Attempting to click the 'Send' button 2nd time: {send_btn.text}")
-                            click_success_2nd = SeleniumUtilities.click_safely(send_btn)
-                            logger.debug(f"Send button click success: {click_success_2nd}")
-                            time.sleep(3)
+                if status["status"] == "failed":
+                    raise Exception("Transaction failed, retrying")
 
-                        # Verify if button disappeared or changed
-                        new_send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                        if not new_send_btn or new_send_btn.text.strip().lower() != 'send':
-                            break
-
-                    except Exception as e:
-                        last_exception = e
-                        logger.debug(f"Send button attempt {send_attempt + 1} failed: {str(e)}")
-
-                    send_attempt += 1
-                    time.sleep(1)
-
-                    if send_attempt == max_send_attempts:
-                        raise Exception(
-                            f"Failed to complete Send action after {max_send_attempts} attempts. Last error: {str(last_exception)}")
-
-
-                # Check result with retries
-                result = None
-                for _ in range(5):
-                    result = MonadFaucet.check_result_status(driver)
-                    if result["status"] != "unknown":
-                        break
-                    time.sleep(1)
-
-                if not result or result["status"] == "unknown":
-                    raise Exception("No valid result detected")
-
-                result["wallet_address"] = wallet_address
-                return result
+                raise Exception("Unknown status after sending")
 
             except Exception as e:
                 logger.error(f"Attempt {attempt + 1} failed: {str(e)}")
                 if attempt < MAX_RETRIES - 1:
-                    delay = MonadFaucet.exponential_backoff(attempt)
-                    logger.debug(f"Retrying in {delay:.1f} seconds...")
-                    time.sleep(delay)
+                    time.sleep(MonadFaucet.exponential_backoff(attempt))
                     driver.refresh()
-                else:
-                    return {
-                        "status": "error",
-                        "message": str(e),
-                        "wallet_address": wallet_address
-                    }
 
         return {
             "status": "max_retries_exceeded",
@@ -258,7 +157,7 @@ class MonadFaucet:
         activity = {'Monad_Faucet_Portal': None}
 
         try:
-            result = MonadFaucet.claim_mon_token(driver, wallet_address)
+            result = MonadFaucet.process_claim(driver, wallet_address)
             activity['Monad_Faucet_Portal'] = result
 
             if result.get("status") == "require_morkie_id":
