@@ -208,16 +208,11 @@ async def operationEnv(
             helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
             helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 
-            if row == 1 or row == 7:
-                helper.open_tab("https://app.grass.io/dashboard")
-
-
-            # open_tab(driver, "https://faucet.morkie.xyz/monad")
-            # open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
 
             # project_1(driver)  # для примера только
             # project_2(driver)  # для примера только
             # project_3(driver)  # для примера только
+
 
             return True
         else:
@@ -239,7 +234,6 @@ async def restart_browser_profile(driver, env_id, unique_id, env_name, count):
             f"Env ID: {env_id} будет остановлен и закрыт. {"#" * 20}"
         )
         sys.exit(1)
-
     else:
         # Закрываем драйвер и останавливаем профиль
         await asyncio.sleep(5)
@@ -265,10 +259,6 @@ async def main_flow(
 
 ):
     """Основной рабочий процесс для одного профиля."""
-    global mode_close_profile_or_not
-    if row == 1 or row == 7:
-        mode_close_profile_or_not = "no"
-
     driver = None
     count = 0
     try:
