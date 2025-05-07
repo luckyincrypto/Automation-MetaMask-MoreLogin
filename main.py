@@ -20,8 +20,22 @@ from faucet_morkie.faucet_morkie import MonadFaucet
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import MetaMaskHelper
 from create_mm_wallet import create_wallet
-from config import logger, DATA_BASE_PATH, WORKSHEET_NAME
+from config import logger, DATA_BASE_PATH, WORKSHEET_NAME, DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 from MoreLogin.browser_manager import BrowserManager
+
+
+
+from database import Database
+from datetime import datetime
+
+# Инициализация базы данных
+db = Database(
+    dbname=DB_NAME,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    host=DB_HOST,
+    port=DB_PORT,
+)
 
 
 async def read_user_list_file(
@@ -204,7 +218,12 @@ async def operationEnv(
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
             result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-            print(f'Result of: {result}')
+            db.insert_activity(result)
+            print("\nВсе успешные активности:")
+            print(db.get_activities({'status': 'success'}))
+            db.close()
+
+            # print(f'Result of: {result}')
             helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
             helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 

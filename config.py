@@ -61,6 +61,12 @@ class Config:
         self.secret_key = self.env.str("SECRET_KEY")
         self.worksheet_name = self.env.str("WORKSHEET_NAME")
 
+        self.db_port = self.env("DB_PORT")
+        self.db_host = self.env.str("DB_HOST")
+        self.db_password = self.env.str("DB_PASSWORD")
+        self.db_user = self.env.str("DB_USER")
+        self.db_name = self.env.str("DB_NAME")
+
     @staticmethod
     def _setup_environment() -> Env:
         """Загрузка переменных окружения"""
@@ -79,3 +85,9 @@ APP_ID = config.app_id
 APP_KEY = config.app_key
 DATA_BASE_PATH = config.file_path
 WORKSHEET_NAME = config.worksheet_name
+
+DB_NAME=config.db_name
+DB_USER=config.db_user
+DB_PASSWORD=config.db_password
+DB_HOST=config.db_host
+DB_PORT=config.db_port
