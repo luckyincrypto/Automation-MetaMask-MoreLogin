@@ -218,9 +218,29 @@ async def operationEnv(
             # Тут нужно будет написать остальные шаги по работе с профилем, автоматизации на различных сайтах.
 
             result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-            db.insert_activity(result)
-            print("\nВсе успешные активности:")
-            print(db.get_activities({'status': 'success'}))
+
+            all_info = db.insert_activity(row, result)
+            print(f"\nВсе успешные активности: {all_info}")
+
+
+            profile_data = db.get_profile_status(row=row)
+            if profile_data:
+                if profile_data['status'] == 'success':
+                    print(f"Профиль {profile_data['row']}: УСПЕШНО")
+                else:
+                    print(f"Профиль {profile_data['row']}: Ожидает до {profile_data['next_attempt']}")
+            else:
+                print(f"Профиль {row} не найден в БД")
+
+            #  Если нужно проверить несколько профилей:
+            profiles = db.get_profiles_status([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+            for p in profiles:
+                if p['status'] == 'success':
+                    print(f"Профиль {p['row']}: ✓ Успех")
+                else:
+                    print(f"Профиль {p['row']}: ⏳ Доступно с {p['next_attempt']}")
+
+
             db.close()
 
             # print(f'Result of: {result}')
