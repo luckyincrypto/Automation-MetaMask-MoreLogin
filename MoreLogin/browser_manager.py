@@ -1,4 +1,5 @@
 import sys
+from typing import Optional, Tuple
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
@@ -11,15 +12,35 @@ class BrowserManager:
 
     @staticmethod
     async def create_web_driver(debug_url: str, web_driver_path: str) -> Chrome:
-        """Инициализация Chrome WebDriver с заданными параметрами"""
+        """
+        Инициализация Chrome WebDriver с заданными параметрами
+
+        Args:
+            debug_url: URL для отладки
+            web_driver_path: Путь к WebDriver
+
+        Returns:
+            Chrome: Инициализированный экземпляр Chrome WebDriver
+        """
         options = Options()
         options.add_experimental_option("debuggerAddress", debug_url)
         service = Service(executable_path=web_driver_path)
         return Chrome(service=service, options=options)
 
     @staticmethod
-    async def start_browser_profile(env_id: str) -> tuple[str, str]:
-        """Запуск профиля браузера через API MoreLogin"""
+    async def start_browser_profile(env_id: str) -> Tuple[str, str]:
+        """
+        Запуск профиля браузера через API MoreLogin
+
+        Args:
+            env_id: ID окружения
+
+        Returns:
+            Tuple[str, str]: Кортеж из debug URL и пути к WebDriver
+
+        Raises:
+            ConnectionError: При ошибке запуска профиля
+        """
         try:
             request_path = f"{BASEURL}/api/env/start"
             data = {"envId": env_id, "encryptKey": SECRET_KEY}
@@ -35,12 +56,19 @@ class BrowserManager:
             )
         except KeyError as e:
             logger.critical(f"Сервер вернул неполный ответ: {e}")
-            # return f"Сервер вернул неполный ответ: {e}"
-
+            raise
 
     @staticmethod
     async def stop_browser_profile(env_id: str) -> dict:
-        """Завершение работы профиля браузера"""
+        """
+        Завершение работы профиля браузера
+
+        Args:
+            env_id: ID окружения
+
+        Returns:
+            dict: Ответ от сервера
+        """
         request_path = f"{BASEURL}/api/env/close"
         data = {"envId": env_id, "encryptKey": SECRET_KEY}
         response = postRequest(request_path, data, requestHeader(APP_ID, APP_KEY)).json()
@@ -48,8 +76,19 @@ class BrowserManager:
         return response
 
     @staticmethod
-    async def get_list_browser_profiles(unique_id: int) -> tuple[str, int, str]:
-        """Получение списка профилей браузера"""
+    async def get_list_browser_profiles(unique_id: int) -> Tuple[str, int, str]:
+        """
+        Получение списка профилей браузера
+
+        Args:
+            unique_id: Уникальный идентификатор профиля
+
+        Returns:
+            Tuple[str, int, str]: Кортеж из ID профиля, unique_id и имени профиля
+
+        Raises:
+            SystemExit: При ошибке API или отсутствии профиля
+        """
         request_path = f"{BASEURL}/api/env/page"
         data = {"pageNo": 1, "pageSize": 100, "envName": "-"}
 
@@ -87,4 +126,3 @@ async def more_login():
         # ... работа с драйвером ...
     except Exception as e:
         logger.error(f" (more_login), Произошла ошибка: {e}")
-

@@ -162,7 +162,6 @@ class MonadFaucet:
                 if not SeleniumUtilities.find_element_safely(driver, By.XPATH, "//body", timeout=10):
                     raise Exception("Page failed to load")
 
-
                 claim_btn = SeleniumUtilities.find_button_by_text(driver, 'Claim $MON')
                 if not claim_btn or not SeleniumUtilities.click_safely(claim_btn):
                     raise Exception("Failed to interact with claim button")
@@ -187,9 +186,13 @@ class MonadFaucet:
                 # Process result
                 time.sleep(3)  # Wait for transaction processing
                 result = MonadFaucet.get_faucet_status(driver)
+
+                # Ensure all required fields are present
                 result.update({
                     "wallet_address": wallet_address,
-                    "attempt": attempt + 1
+                    "attempt": attempt + 1,
+                    "status": result.get('status', 'unknown'),
+                    "activity_type": "Monad_Faucet_Portal"
                 })
 
                 # Terminal statuses
@@ -198,34 +201,47 @@ class MonadFaucet:
 
                 # Retriable failures
                 if result['status'] == 'failed' and attempt < MAX_RETRIES - 1:
-                    backoff = MonadFaucet.exponential_backoff(attempt)
-                    logger.info("Attempt %d failed. Retrying in %.1fs", attempt + 1, backoff)
-                    time.sleep(backoff)
+                    delay = MonadFaucet.exponential_backoff(attempt)
+                    logger.warning("Claim failed, retrying in %.1f seconds...", delay)
+                    time.sleep(delay)
                     continue
 
                 return result
 
             except Exception as e:
-                logger.error("Attempt %d error: %s", attempt + 1, str(e))
-                if attempt < MAX_RETRIES - 1:
-                    time.sleep(MonadFaucet.exponential_backoff(attempt))
-                    driver.refresh()
+                logger.error("Claim attempt %d failed: %s", attempt + 1, str(e))
+                if attempt == MAX_RETRIES - 1:
+                    return {
+                        'status': 'error',
+                        'message': str(e),
+                        'wallet_address': wallet_address,
+                        'attempt': attempt + 1,
+                        'activity_type': "Monad_Faucet_Portal"
+                    }
+                delay = MonadFaucet.exponential_backoff(attempt)
+                time.sleep(delay)
 
         return {
-            "status": "max_retries_exceeded",
-            "message": f"All {MAX_RETRIES} attempts failed",
-            "wallet_address": wallet_address
+            'status': 'max_retries_exceeded',
+            'message': 'Maximum retry attempts reached',
+            'wallet_address': wallet_address,
+            'attempt': MAX_RETRIES,
+            'activity_type': "Monad_Faucet_Portal"
         }
 
     @staticmethod
     def process(driver: Any, wallet_address: str) -> Dict[str, Any]:
-        """Main processing wrapper with comprehensive error handling."""
-        activity = {'Monad_Faucet_Portal': None}
-
+        """Process faucet claim and return result with activity type."""
         try:
             logger.info("Initiating faucet claim for %s", wallet_address)
             result = MonadFaucet.process_claim(driver, wallet_address)
-            activity['Monad_Faucet_Portal'] = result
+
+            # Ensure all required fields are present
+            result.update({
+                'activity_type': 'Monad_Faucet_Portal',
+                'status': result.get('status', 'unknown'),
+                'wallet_address': wallet_address
+            })
 
             if result.get("status") == "require_morkie_id":
                 logger.info("Redirecting for Morkie ID registration")
@@ -233,13 +249,13 @@ class MonadFaucet:
                 MetaMaskHelper.open_tab(driver, "https://app.1inch.io/#/1/simple/swap/1:ETH/8453:ETH")
 
             logger.info("Claim completed with status: %s", result.get('status', 'unknown'))
-            return activity
+            return result
 
         except Exception as e:
             logger.critical("Fatal process error: %s", str(e))
-            activity['Monad_Faucet_Portal'] = {
-                "status": "process_failed",
-                "message": str(e),
-                "wallet_address": wallet_address
+            return {
+                'activity_type': 'Monad_Faucet_Portal',
+                'status': 'process_failed',
+                'message': str(e),
+                'wallet_address': wallet_address
             }
-            return activity

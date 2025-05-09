@@ -6,3 +6,25 @@
 # ERROR - Отображение всех сообщений кроме отладочных, информационных и предупреждающих (DEBUG, INFO, WARNING)
 LOG_LEVEL: DEBUG  # DEBUG, INFO, WARNING, ERROR
 
+# Глобальные настройки скрипта
+GLOBAL_SETTINGS:
+  # Закрывать профиль после выполнения: TRUE/FALSE
+  MODE_CLOSE_PROFILE: true
+  # Перемешивать профили при обработке нескольких: TRUE/FALSE
+  MIX_PROFILES: true
+  # Задержка между профилями
+  PROFILE_DELAY:
+    ENABLED: false  # true - задержка включена по умолчанию, false - выключена
+    MIN: 10       # null - задержка отключена, число - минимальное время в секундах
+    MAX: 120       # null - задержка отключена, число - максимальное время в секундах
+
+# Настройки обработки активностей MonadFaucet
+ACTIVITY_SETTINGS:
+  # Автоматически выполнять активность при неожиданном статусе: TRUE/FALSE
+  AUTO_PROCESS_UNEXPECTED_STATUS: true
+  # Время ожидания после успешной активности (часы, минуты)
+  SUCCESS_WAIT_TIME:
+    HOURS: 24
+    MINUTES: 3
+  # Максимальное количество хранимых записей для каждого профиля в БД: crypto_activities
+  MAX_RECORDS_PER_PROFILE: 35
