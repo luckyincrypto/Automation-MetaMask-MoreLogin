@@ -1,11 +1,15 @@
 import sqlite3
 from datetime import datetime, timedelta
 import json
+from pprint import pprint
 from typing import Optional, List, Dict, TypedDict, Any, Tuple, Union
 from contextlib import contextmanager
 from config import DB_NAME, logger, config
 from faucet_morkie.faucet_morkie import MonadFaucet
 
+import os
+logger.debug(f"Путь к БД активностей: {os.path.abspath(DB_NAME)}")
+logger.debug(f"Доступ на запись БД активностей: {os.access(DB_NAME, os.W_OK)}")
 
 class ActivityRecord(TypedDict):
     row: int
@@ -80,7 +84,7 @@ class SQLiteDatabase:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS activities (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        row_number INTEGER NOT NULL,
+                        profile_number INTEGER NOT NULL,
                         activity_type TEXT NOT NULL,
                         status TEXT NOT NULL,
                         wallet_address TEXT NOT NULL,
@@ -92,7 +96,7 @@ class SQLiteDatabase:
 
                 # Создаем индексы атомарно
                 indexes = [
-                    "CREATE INDEX IF NOT EXISTS idx_row ON activities(row_number)",
+                    "CREATE INDEX IF NOT EXISTS idx_row ON activities(profile_number)",
                     "CREATE INDEX IF NOT EXISTS idx_status ON activities(status)",
                     "CREATE INDEX IF NOT EXISTS idx_wallet ON activities(wallet_address)",
                     "CREATE INDEX IF NOT EXISTS idx_type ON activities(activity_type)",
@@ -120,7 +124,7 @@ class SQLiteDatabase:
             details = {}
 
         return {
-            'row': record['row_number'],
+            'row': record['profile_number'],
             'status': record['status'],
             'next_attempt': record['next_attempt'],
             'activity_type': record['activity_type'],
@@ -134,7 +138,7 @@ class SQLiteDatabase:
         try:
             # Проверяем наличие некорректных JSON в details
             cursor = conn.execute("""
-                SELECT id, row_number, details
+                SELECT id, profile_number, details
                 FROM activities
                 WHERE json_valid(details) = 0
             """)
@@ -145,7 +149,7 @@ class SQLiteDatabase:
 
             # Проверяем корректность timestamp
             cursor = conn.execute("""
-                SELECT id, row_number, timestamp
+                SELECT id, profile_number, timestamp
                 FROM activities
                 WHERE datetime(timestamp) IS NULL
             """)
@@ -168,7 +172,7 @@ class SQLiteDatabase:
         try:
             cursor = conn.execute("""
                 SELECT * FROM activities
-                WHERE row_number = ?
+                WHERE profile_number = ?
                 ORDER BY timestamp DESC
                 LIMIT 1
             """, (row,))
@@ -231,27 +235,64 @@ class SQLiteDatabase:
     def insert_activity_with_connection(self, conn, row: int, activity_data: Dict[str, Any]):
         """Вставляет активность с указанием номера строки используя существующее соединение"""
         try:
-            self._validate_activity_data(activity_data)
-            activity_data['row_number'] = row
+            logger.debug(f"Начало вставки данных для Профиля № {row}")
+            logger.debug(f"Полученные данные: {json.dumps(activity_data, indent=2, ensure_ascii=False)}")
 
-            conn.execute("""
-                INSERT INTO activities (
-                    row_number, activity_type, status, wallet_address,
-                    next_attempt, details
-                ) VALUES (:row_number, :activity_type, :status, :wallet_address,
-                         :next_attempt, :details)
-            """, {
-                'row_number': row,
+            self._validate_activity_data(activity_data)
+            activity_data['profile_number'] = row
+
+            # Создаем копию данных для details, исключая основные поля
+            details = activity_data.copy()
+            fields_to_exclude = ['profile_number', 'activity_type', 'status', 'wallet_address', 'next_attempt']
+            for field in fields_to_exclude:
+                details.pop(field, None)
+
+            logger.debug(f"Подготовленные данные для вставки: {json.dumps(details, indent=2, ensure_ascii=False)}")
+
+            # Подготовка параметров для вставки
+            params = {
+                'profile_number': row,
                 'activity_type': activity_data['activity_type'],
                 'status': activity_data['status'],
                 'wallet_address': activity_data['wallet_address'],
-                'next_attempt': activity_data.get('next_claim'),
-                'details': json.dumps(activity_data)
-            })
+                'next_attempt': activity_data.get('next_attempt'),
+                'details': json.dumps(details)
+            }
+            logger.debug(f"Параметры для вставки: {json.dumps(params, indent=2, ensure_ascii=False)}")
+
+            # Выполнение вставки
+            cursor = conn.execute("""
+                INSERT INTO activities (
+                    profile_number, activity_type, status, wallet_address,
+                    next_attempt, timestamp, details
+                ) VALUES (:profile_number, :activity_type, :status, :wallet_address,
+                         :next_attempt, datetime('now', 'localtime'), :details)
+            """, params)
+
+            # Проверка результата вставки
+            if cursor.rowcount != 1:
+                raise sqlite3.Error(f"Failed to insert row: {cursor.rowcount} rows affected")
+
+            # Подтверждение транзакции
+            conn.commit()
+            logger.debug(f"Транзакция подтверждена для Профиля № {row}")
+
             message = activity_data.get('message', '')
             logger.update(f"Активность успешно добавлена для Профиля № {row}: {activity_data['activity_type']} - {activity_data['status']} - {message}")
+
+            # Проверка вставленной записи
+            cursor = conn.execute("""
+                SELECT * FROM activities WHERE id = last_insert_rowid()
+            """)
+            inserted_row = cursor.fetchone()
+            if inserted_row:
+                logger.debug(f"Проверка вставленной записи: {dict(inserted_row)}")
+            else:
+                logger.error("Не удалось найти вставленную запись")
+
         except (sqlite3.Error, ValueError) as e:
             logger.error(f"Ошибка добавления активности для Профиля № {row}: {e}")
+            conn.rollback()
             raise DatabaseError(f"Failed to insert activity: {e}")
 
     def insert_activity(self, row: int, activity_data: Dict[str, Any]):
@@ -269,7 +310,7 @@ class SQLiteDatabase:
             with self._get_connection() as conn:
                 cursor = conn.execute("""
                     SELECT * FROM activities
-                    WHERE row_number = ?
+                    WHERE profile_number = ?
                     ORDER BY timestamp DESC
                     LIMIT 1
                 """, (row,))
@@ -288,11 +329,11 @@ class SQLiteDatabase:
                 cursor = conn.execute(f"""
                     SELECT a.* FROM activities a
                     INNER JOIN (
-                        SELECT row_number, MAX(timestamp) as max_ts
+                        SELECT profile_number, MAX(timestamp) as max_ts
                         FROM activities
-                        WHERE row_number IN ({','.join(['?'] * len(rows))})
-                        GROUP BY row_number
-                    ) b ON a.row_number = b.row_number AND a.timestamp = b.max_ts
+                        WHERE profile_number IN ({','.join(['?'] * len(rows))})
+                        GROUP BY profile_number
+                    ) b ON a.profile_number = b.profile_number AND a.timestamp = b.max_ts
                 """, rows)
 
                 return [self._parse_activity_record(r) for r in cursor.fetchall()]
@@ -320,8 +361,8 @@ class SQLiteDatabase:
                     DELETE FROM activities
                     WHERE id NOT IN (
                         SELECT id FROM (
-                            SELECT id, ROW_NUMBER() OVER (
-                                PARTITION BY row_number ORDER BY timestamp DESC
+                            SELECT id, profile_number() OVER (
+                                PARTITION BY profile_number ORDER BY timestamp DESC
                             ) as rn FROM activities
                         ) WHERE rn <= ?
                     )
@@ -352,6 +393,7 @@ class SQLiteDatabase:
 
 
 def process_activity(driver, wallet_mm_from_browser_extension, row):
+    logger.info(f"Начало обработки Профиль № {row}, адрес: {wallet_mm_from_browser_extension}")
     try:
         db = SQLiteDatabase()
         with db._get_connection() as conn:
@@ -361,10 +403,11 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
 
             # Проверяем, нужно ли выполнять активность
             should_process, reason = db.should_process_activity_with_connection(conn, row, wallet_mm_from_browser_extension)
+            logger.debug(f"Проверка необходимости обработки: should_process={should_process}, reason={reason}")
 
             if not should_process:
-                logger.info(f"Skipping activity for Профиль № {row}: {reason}")
-                return
+                logger.info(f"Пропуск активности для Профиль № {row}. Причина: {reason}")
+                return False
 
             # Если статус неожиданный, проверяем настройки
             if "Unexpected status" in reason:
@@ -377,11 +420,17 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
 
             # Выполняем активность
             try:
+                logger.debug(f"Вызов MonadFaucet.process для Профиля № {row}")
                 result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-                print("Результат выполнения активности:", result)
+                logger.debug(f"Результат MonadFaucet.process: {json.dumps(result, indent=2, ensure_ascii=False)}")
+
+                logger.update(f"Результат выполнения активности для Профиля № {row}: {result}")
+
                 # Сохраняем результат
+                logger.debug(f"Начало сохранения результата в БД для Профиля № {row}")
                 db.insert_activity_with_connection(conn, row, result)
-                logger.update(f"Activity processed and saved for Профиль № {row}")
+                logger.debug(f"Результат успешно сохранен в БД для Профиля № {row}")
+                return True
             except Exception as e:
                 logger.error(f"Error processing activity for Профиль № {row}: {e}")
                 raise
@@ -389,7 +438,7 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
         logger.error(f"Database error in process_activity: {e}")
         raise
 
-
+# Запустите эту функцию отдельно для проверки содержимое базы данных
 def check_database_content():
     """Проверяет и выводит содержимое базы данных"""
     try:
@@ -397,7 +446,7 @@ def check_database_content():
             with db._get_connection() as conn:
                 # Получаем все записи, отсортированные по времени
                 cursor = conn.execute("""
-                    SELECT row_number, activity_type, status, wallet_address,
+                    SELECT profile_number, activity_type, status, wallet_address,
                            next_attempt, timestamp, details
                     FROM activities
                     ORDER BY timestamp DESC
@@ -417,7 +466,7 @@ def check_database_content():
                         details = {}
 
                     logger.info(
-                        f"\nПрофиль № {record['row_number']}\n"
+                        f"\nПрофиль № {record['profile_number']}\n"
                         f"Тип активности: {record['activity_type']}\n"
                         f"Статус: {record['status']}\n"
                         f"Адрес: {record['wallet_address']}\n"
@@ -429,7 +478,26 @@ def check_database_content():
     except Exception as e:
         logger.error(f"Ошибка при проверке содержимого базы данных: {e}")
 
+# Для проверки через Python
+def print_all_records(db_path):
+    with sqlite3.connect(db_path) as conn:
+        logger.info("\nВывод последних 10 записей из БД:\n")
+        cursor = conn.cursor()
+        logger.info("\nВывод последних 10 записей из БД:\n")
+        cursor.execute("SELECT * FROM activities ORDER BY id DESC LIMIT 10")
+        # for row in cursor.fetchall():
+        #     logger.info(f'row: {row}')
+        logger.info(f"Получен результат: {json.dumps(cursor.fetchall(), indent=2)}")
 
-# if __name__ == "__main__":
-#     # Если файл запущен напрямую, показываем содержимое базы данных
-#     check_database_content()
+
+if __name__ == "__main__":
+    # Если файл запущен напрямую, показываем содержимое базы данных
+    check_database_content()
+    # print_all_records(os.path.abspath(DB_NAME))
+
+    db = SQLiteDatabase()
+    # info = db.get_profiles_status(rows=[1,2,3,4,5,6,7,8,9,10])
+    # for _ in info:
+    #     pprint(_)
+    # pprint(db.get_profile_status(1))
+    # pprint(info)

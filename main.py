@@ -254,8 +254,8 @@ async def read_user_list_file(
 def get_user_input():
     """Получение параметров от пользователя с улучшенной обработкой ввода и логированием."""
     try:
-        start_account = int(input("\nВведите номер начального аккаунта: "))
-        end_account = int(input("Введите номер конечного аккаунта: "))
+        start_account = int(input("\nВведите номер начального профиля: "))
+        end_account = int(input("Введите номер конечного профиля: "))
 
         if start_account < 1 or end_account < start_account:
             raise ValueError("Invalid account range")

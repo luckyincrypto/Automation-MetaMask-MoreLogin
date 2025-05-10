@@ -79,10 +79,10 @@ class Config:
         self.worksheet_name = self.env.str("WORKSHEET_NAME")
 
         # Настройки базы данных
-        self.db_port = self.env("DB_PORT")
-        self.db_host = self.env.str("DB_HOST")
-        self.db_password = self.env.str("DB_PASSWORD")
-        self.db_user = self.env.str("DB_USER")
+        # self.db_port = self.env("DB_PORT")
+        # self.db_host = self.env.str("DB_HOST")
+        # self.db_password = self.env.str("DB_PASSWORD")
+        # self.db_user = self.env.str("DB_USER")
         self.db_name = self.env.str("DB_NAME")
 
     def _load_yaml_settings(self):
@@ -115,10 +115,10 @@ WORKSHEET_NAME = config.worksheet_name
 
 # Настройки базы данных
 DB_NAME = f"{config.db_name}.sqlite3"  # Для SQLite Database и PostgreSQL
-DB_USER = config.db_user  # Для PostgreSQL
-DB_PASSWORD = config.db_password  # Для PostgreSQL
-DB_HOST = config.db_host  # Для PostgreSQL
-DB_PORT = config.db_port  # Для PostgreSQL
+# DB_USER = config.db_user  # Для PostgreSQL
+# DB_PASSWORD = config.db_password  # Для PostgreSQL
+# DB_HOST = config.db_host  # Для PostgreSQL
+# DB_PORT = config.db_port  # Для PostgreSQL
 
 # Настройки из YAML
 MODE_CLOSE_PROFILE = config.mode_close_profile

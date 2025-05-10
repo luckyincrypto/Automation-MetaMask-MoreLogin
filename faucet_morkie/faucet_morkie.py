@@ -138,7 +138,7 @@ class MonadFaucet:
             if result['status'] == 'limit_exceeded':
                 if (wait_match := re.search(r'in (\d+h \d+m|\d+h|\d+m)', message_text)):
                     if (wait_delta := MonadFaucet.parse_wait_time(wait_match.group(1))):
-                        result["next_claim"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
+                        result["next_attempt"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
 
             elif result['status'] == 'success':
                 if (
