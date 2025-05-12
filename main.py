@@ -14,16 +14,19 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from database import process_activity, DatabaseError
+from automation.run_automation import schedule_next_run
+from database import process_activity, DatabaseError, process_random_profile
+
 # Локальные модули
 from lava_moat import modify_file_runtimelavamoat
 from meta_mask import MetaMaskHelper
 from create_mm_wallet import create_wallet
 from config import (
-    logger, DATA_BASE_PATH, WORKSHEET_NAME, config,
-    MODE_CLOSE_PROFILE, GLOBAL_SETTINGS
+    logger, DATA_BASE_PATH, WORKSHEET_NAME,
+    MODE_CLOSE_PROFILE, GLOBAL_SETTINGS, MIX_PROFILES, PROFILE_DELAY, AUTO_MODE
 )
 from MoreLogin.browser_manager import BrowserManager
+
 
 
 def create_password():
@@ -112,7 +115,7 @@ async def main_flow(
                 continue
 
             # Логирование запуска профиля
-            logger.info(
+            logger.warning(
                 f"\n{'#' * 20} (main_flow) SCRIPT STARTED Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} {'#' * 20}\n"
             )
 
@@ -159,7 +162,7 @@ async def main_flow(
                 driver.quit()
                 await BrowserManager.stop_browser_profile(env_id)
                 # Добавляем сообщение о завершении работы с профилем
-                logger.info(
+                logger.warning(
                     f"\n{'#' * 20} (main_flow) SCRIPT ENDED for Profile №: {unique_id}, Env_Name: {env_name}, Env ID: {env_id} {'#' * 20}\n"
                 )
             except Exception as e:
@@ -251,6 +254,7 @@ async def read_user_list_file(
         raise MainError(f"Failed to read user list: {e}")
 
 
+
 def get_user_input():
     """Получение параметров от пользователя с улучшенной обработкой ввода и логированием."""
     try:
@@ -282,7 +286,7 @@ def get_user_input():
 
         if start_account != end_account:
             # Получаем значение из конфига для перемешивания профилей
-            default_mix_profiles = GLOBAL_SETTINGS.get('MIX_PROFILES', True)
+            default_mix_profiles = MIX_PROFILES
             default_mix_prompt = "Y" if default_mix_profiles else "N"
 
             mix_profiles = input(
@@ -302,10 +306,10 @@ def get_user_input():
                 print("Профили будут запущены в порядке их создания.")
 
             # Получаем настройки задержки из конфига
-            profile_delay = GLOBAL_SETTINGS.get('PROFILE_DELAY', {})
-            default_delay_enabled = profile_delay.get('ENABLED', False)
-            default_delay_min = profile_delay.get('MIN', 10)
-            default_delay_max = profile_delay.get('MAX', 60)
+
+            default_delay_enabled = PROFILE_DELAY.get('ENABLED', False)
+            default_delay_min = PROFILE_DELAY.get('MIN', 10)
+            default_delay_max = PROFILE_DELAY.get('MAX', 60)
 
             delay_prompt = "Y" if default_delay_enabled else "N"
             delay_execution = input(
@@ -353,6 +357,7 @@ def get_user_input():
         raise MainError(f"Invalid user input: {e}")
     except Exception as e:
         logger.error(f"Error getting user input: {e}")
+        logger.error(traceback.format_exc())  # Получаем полный traceback
         raise MainError(f"Failed to get user input: {e}")
 
 
@@ -421,8 +426,24 @@ async def main():
     profiles = []
 
     try:
-        # Получаем параметры от пользователя
-        start_account, end_account, mix_profiles, delay_from_to, mode_close_profile_or_not = get_user_input()
+        # Проверяем режим работы
+        if GLOBAL_SETTINGS.get('AUTO_MODE', False):  # Если включен автоматический режим в config.yaml
+
+            logger.info("Установка в расписание для следующего запуска в автоматическом режиме.")
+            schedule_next_run()
+            logger.info("Запуск скрипта в автоматическом режиме установлен.")
+
+            # Получаем один рандомный аккаунт
+            logger.info("Автоматический режим: выбор аккаунта из базы данных")
+            selected_account, wallet = process_random_profile()
+            start_account = selected_account
+            end_account = selected_account
+            mode_close_profile_or_not = 'y'
+            mix_profiles = 'n'
+            delay_from_to = [0,0]
+        else:
+            # Интерактивный режим. Получаем параметры от пользователя
+            start_account, end_account, mix_profiles, delay_from_to, mode_close_profile_or_not = get_user_input()
 
         # Проверка существует ли файл с базой данных DB.xlsx
         if os.path.exists(DATA_BASE_PATH):
@@ -475,7 +496,7 @@ async def main():
                 )
 
                 start_time = datetime.now()
-                logger.info(
+                logger.update(
                     f"\n{'=' * 80}\n"
                     f"Обработка Профиль № {unique_id} ({idx}/{len(profiles)})\n"
                     f"Имя: {env_name}, Адрес: {mm_address}\n"
@@ -529,7 +550,12 @@ async def main():
         else:
             profile_word = "профилей"
 
-        logger.info(f"Успешно обработано {count_profile} {profile_word} из {len(profiles)}")
+        logger.info(f"\n Успешно обработано {count_profile} {profile_word} из {len(profiles)}")
+
+        # # После успешного выполнения, если включен AUTO_MODE, планируем следующий запуск
+        # if AUTO_MODE:
+        #     schedule_next_run()
+
 
 
 if __name__ == "__main__":

@@ -18,7 +18,13 @@ GLOBAL_SETTINGS:
     MIN: 10       # null - задержка отключена, число - минимальное время в секундах
     MAX: 120       # null - задержка отключена, число - максимальное время в секундах
 
-# Настройки обработки активностей MonadFaucet
+  # Режим работы скрипта
+  AUTO_MODE: false  # true - автоматический режим, false - интерактивный режим
+  MIN_INTERVAL_MINUTES: 1  # Минимальный интервал между запусками (в минутах)
+  MAX_INTERVAL_MINUTES: 3 # Максимальный интервал между запусками (в минутах)
+
+
+# Настройки обработки crypto activities в MonadFaucet.
 ACTIVITY_SETTINGS:
   # Автоматически выполнять активность при неожиданном статусе: TRUE/FALSE
   AUTO_PROCESS_UNEXPECTED_STATUS: true

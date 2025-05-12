@@ -94,6 +94,11 @@ class Config:
         # Глобальные настройки
         self.global_settings = config_data.get("GLOBAL_SETTINGS", {})
         self.mode_close_profile = self.global_settings.get("MODE_CLOSE_PROFILE", True)
+        self.mix_profiles = self.global_settings.get("MIX_PROFILES", True)
+        self.profile_delay = self.global_settings.get("PROFILE_DELAY")
+        self.auto_mode = self.global_settings.get("AUTO_MODE", False)
+        self.min_interval_minutes = self.global_settings.get("MIN_INTERVAL_MINUTES", 60)  # Минимальный интервал между запусками (в минутах)
+        self.max_interval_minutes = self.global_settings.get("MAX_INTERVAL_MINUTES", 150)  # Минимальный интервал между запусками (в минутах)
 
         # Настройки активности
         self.activity_settings = config_data.get("ACTIVITY_SETTINGS", {})
@@ -106,7 +111,7 @@ class Config:
 config = Config()
 
 # Экспортируем все необходимые переменные
-BASEURL = config.baseurl
+BASEURL = config.baseurl  # Используем порт из .env файла
 SECRET_KEY = config.secret_key
 APP_ID = config.app_id
 APP_KEY = config.app_key
@@ -121,8 +126,15 @@ DB_NAME = f"{config.db_name}.sqlite3"  # Для SQLite Database и PostgreSQL
 # DB_PORT = config.db_port  # Для PostgreSQL
 
 # Настройки из YAML
-MODE_CLOSE_PROFILE = config.mode_close_profile
+GLOBAL_SETTINGS = config.global_settings # Глобальные настройки скрипта
+MODE_CLOSE_PROFILE = config.mode_close_profile  # Закрывать профиль после выполнения: TRUE/FALSE
+MIX_PROFILES = config.mix_profiles  # Перемешивать профили при обработке нескольких: TRUE/FALSE
+PROFILE_DELAY = config.profile_delay   # Задержка между профилями
+AUTO_MODE = config.auto_mode  # Автоматический запуск скрипта: TRUE/FALSE
+MIN_INTERVAL_MINUTES = config.min_interval_minutes   # Минимальный интервал между запусками main.py (в минутах)
+MAX_INTERVAL_MINUTES = config.max_interval_minutes  # Максимальный интервал между запусками (в минутах)
+
+# Настройки обработки активностей MonadFaucet
 AUTO_PROCESS_UNEXPECTED_STATUS = config.auto_process_unexpected_status
 SUCCESS_WAIT_TIME = config.success_wait_time
 MAX_RECORDS_PER_PROFILE = config.max_records_per_profile
-GLOBAL_SETTINGS = config.global_settings

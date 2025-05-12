@@ -60,7 +60,7 @@ class MetaMaskHelper(SeleniumUtilities):
             return None
 
         if wallet_from_extension == mm_address:
-            logger.warning("(check_mm_data_base) Адреса совпадают")
+            logger.update(f"(check_mm_data_base) Адреса совпадают: {mm_address} = {wallet_from_extension}")
             return wallet_from_extension
 
         # Обновление адреса в БД
@@ -92,7 +92,7 @@ class MetaMaskHelper(SeleniumUtilities):
 
         if version_element:
             version = version_element.text
-            logger.warning(f"(version_mm) Версия MetaMask: {version}")
+            logger.debug(f"(version_mm) Версия MetaMask: {version}")
             return version
 
         logger.error("(version_mm) Не удалось определить версию")
@@ -413,7 +413,8 @@ class MetaMaskHelper(SeleniumUtilities):
     def meta_mask(self, seed, password, mm_address, row, workbook_mm, worksheet_mm, file_path):
         """Основная функция работы с MetaMask."""
         if self.starting_metamask(seed, password):
-            self.version_mm()
+            # self.version_mm()
+            logger.update(f"Версия MM: {self.version_mm()}")
             self.pop_up_window_close()
             return self.check_mm_data_base(
                 mm_address,

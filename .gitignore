@@ -200,4 +200,6 @@ app.log
 DB.xlsx
 DB_my.xlsx!/faucet_morkie/optimized_code.py
 optimized_code.py
-!/faucet_morkie/optimized_code.py
+!/.vscode/
+!/app.log
+!/automation/task_log.txt

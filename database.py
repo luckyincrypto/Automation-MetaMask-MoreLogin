@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 from datetime import datetime, timedelta
 import json
 from pprint import pprint
@@ -6,8 +7,9 @@ from typing import Optional, List, Dict, TypedDict, Any, Tuple, Union
 from contextlib import contextmanager
 from config import DB_NAME, logger, config
 from faucet_morkie.faucet_morkie import MonadFaucet
-
+import random
 import os
+
 logger.debug(f"Путь к БД активностей: {os.path.abspath(DB_NAME)}")
 logger.debug(f"Доступ на запись БД активностей: {os.access(DB_NAME, os.W_OK)}")
 
@@ -391,6 +393,57 @@ class SQLiteDatabase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
+    def get_random_eligible_profile(self) -> Optional[Tuple[int, str]]:
+        """
+        Выбирает случайный профиль, готовый к обработке
+        Возвращает (row_number, wallet_address) или None если нет подходящих
+        """
+        try:
+            with self._get_connection() as conn:
+                # Получаем все профили из базы
+                cursor = conn.execute("""
+                    SELECT DISTINCT profile_number, wallet_address 
+                    FROM activities
+                    ORDER BY profile_number
+                """)
+                all_profiles = cursor.fetchall()
+
+                if not all_profiles:
+                    logger.info("В базе нет профилей для обработки")
+                    return None
+
+                eligible_profiles = []
+                for profile in all_profiles:
+                    row, wallet_address = profile['profile_number'], profile['wallet_address']
+
+                    # Используем существующую логику проверки
+                    should_process, reason = self.should_process_activity_with_connection(
+                        conn, row, wallet_address
+                    )
+
+                    if should_process:
+                        eligible_profiles.append((row, wallet_address))
+                        logger.debug(f"Профиль {row} подходит для обработки: {reason}")
+                    else:
+                        logger.debug(f"Профиль {row} не подходит: {reason}")
+
+                if not eligible_profiles:
+                    logger.info("Нет профилей, готовых к обработке")
+                    return None
+
+                # Выбираем случайный профиль из подходящих
+                selected_row, selected_wallet = random.choice(eligible_profiles)
+                logger.info(
+                    f"Выбран случайный профиль для обработки: № {selected_row}, "
+                    f"адрес: {selected_wallet[:6]}...{selected_wallet[-4:]}"
+                )
+
+                return selected_row, selected_wallet
+
+        except sqlite3.Error as e:
+            logger.error(f"Ошибка при выборе профиля: {str(e)}")
+            return None
+
 
 def process_activity(driver, wallet_mm_from_browser_extension, row):
     logger.info(f"Начало обработки Профиль № {row}, адрес: {wallet_mm_from_browser_extension}")
@@ -406,7 +459,7 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
             logger.debug(f"Проверка необходимости обработки: should_process={should_process}, reason={reason}")
 
             if not should_process:
-                logger.info(f"Пропуск активности для Профиль № {row}. Причина: {reason}")
+                logger.update(f"Пропуск активности для Профиль № {row}. Причина: {reason}")
                 return False
 
             # Если статус неожиданный, проверяем настройки
@@ -438,7 +491,21 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
         logger.error(f"Database error in process_activity: {e}")
         raise
 
-# Запустите эту функцию отдельно для проверки содержимое базы данных
+
+def process_random_profile():
+    """Обрабатывает случайный подходящий профиль"""
+    db = SQLiteDatabase()
+    profile = db.get_random_eligible_profile()
+
+    if not profile:
+        logger.info("Нет подходящих профилей для обработки")
+        sys.exit(0)  # Корректный выход с кодом 0 (успех)
+
+    row, wallet = profile
+    logger.info(f"Обработка случайного профиля {row}...")
+    return row, wallet
+
+
 def check_database_content():
     """Проверяет и выводит содержимое базы данных"""
     try:
@@ -477,7 +544,6 @@ def check_database_content():
                     )
     except Exception as e:
         logger.error(f"Ошибка при проверке содержимого базы данных: {e}")
-
 # Для проверки через Python
 def print_all_records(db_path):
     with sqlite3.connect(db_path) as conn:

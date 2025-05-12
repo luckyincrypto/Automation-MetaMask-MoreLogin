@@ -43,19 +43,26 @@ class BrowserManager:
         """
         try:
             request_path = f"{BASEURL}/api/env/start"
-            data = {"envId": env_id, "encryptKey": SECRET_KEY}
-            response = postRequest(request_path, data, requestHeader(APP_ID, APP_KEY)).json()
+            data = {"envId": env_id, "encryptKey": 'SECRET_KEY'}
+            logger.debug(f"Отправка запроса на {request_path} с данными: {data}")
 
-            if response["code"] != 0:
-                raise ConnectionError(f"Ошибка запуска профиля: {response['msg']}")
+            response = postRequest(request_path, data, requestHeader(APP_ID, APP_KEY))
+            logger.debug(f"Получен ответ: {response.text}")
 
-            logger.debug(f"Профиль запущен: {response}")
+            response_json = response.json()
+            if response_json["code"] != 0:
+                raise ConnectionError(f"Ошибка запуска профиля: {response_json['msg']}")
+
+            logger.debug(f"Профиль запущен: {response_json}")
             return (
-                f"127.0.0.1:{response['data']['debugPort']}",
-                response["data"]["webdriver"],
+                f"127.0.0.1:{response_json['data']['debugPort']}",
+                response_json["data"]["webdriver"],
             )
         except KeyError as e:
             logger.critical(f"Сервер вернул неполный ответ: {e}")
+            raise
+        except Exception as e:
+            logger.critical(f"Ошибка при запуске профиля: {e}")
             raise
 
     @staticmethod

@@ -2,6 +2,8 @@ import time
 import hashlib
 import random
 import string
+import traceback
+
 import requests
 from typing import Dict, Any
 from config import logger
@@ -86,7 +88,9 @@ def postRequest(url: str, data: Dict[str, Any], headers: Dict[str, str]) -> requ
         response.raise_for_status()
         return response
     except requests.RequestException as e:
+        logger.error(f"Проверьте что антидетект браузер MoreLogin включен в браузере и работает корректно!\n")
         logger.error(f"Ошибка POST-запроса: {e}")
+        # logger.error(traceback.format_exc())  # Получаем полный traceback
         raise
 
 
