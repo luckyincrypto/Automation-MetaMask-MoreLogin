@@ -23,12 +23,18 @@ def run_powershell_script(script_name):
             text=True,
             check=True
         )
-        if "SUCCESS" in result.stdout:
-            logger.info(f"Скрипт {script_path} выполнен успешно: {result.stdout}")
-            return True
-        else:
+        logger.debug(f"Вывод PowerShell скрипта {script_name}:")
+        logger.debug(f"stdout: {result.stdout}")
+        logger.debug(f"stderr: {result.stderr}")
+
+        # Проверяем наличие ошибок в stderr
+        if result.stderr and not "Access is denied" in result.stderr:
             logger.error(f"Ошибка в {script_name}:\n{result.stderr}")
             return False
+
+        # Если нет ошибок в stderr, считаем выполнение успешным
+        logger.info(f"Скрипт {script_path} выполнен успешно")
+        return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Сбой выполнения {script_name}:\n{e.stderr}")
         logger.warning("\n Выполните действия для запуска скрипта в автоматическом режиме: \n"
@@ -108,10 +114,21 @@ if ($task) {
     }
 }
 
-Write-Host "SUCCESS"
+# Проверяем, что задача действительно удалена
+$taskStillExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if (-not $taskStillExists) {
+    Write-Host "SUCCESS"
+    exit 0
+} else {
+    Write-Host "Задача все еще существует после попытки удаления"
+    exit 1
+}
 """)
-            if run_powershell_script("temp_uninstall.ps1"):
-                temp_script.unlink(missing_ok=True)
+            result = run_powershell_script("temp_uninstall.ps1")
+            temp_script.unlink(missing_ok=True)
+
+            # Проверяем, что задача действительно удалена
+            if result:
                 logger.info("Задача успешно удалена из Task Scheduler")
                 sys.exit(0)
             else:
@@ -135,66 +152,104 @@ def schedule_next_run():
         with open(temp_script, "w", encoding='utf-8') as f:
             f.write(f"""#Requires -RunAsAdministrator
 
+# Проверяем права администратора
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {{
+    Write-Host "Требуются права администратора"
+    exit 1
+}}
+
 $taskName = "AutoMetaMaskMoreLogin"
 $taskFolder = "\\Automation-MetaMask-MoreLogin\\"
 $projectRoot = "{PROJECT_ROOT}"
 $logPath = "$projectRoot\\automation\\task_log.txt"
 $description = "Автоматический запуск скрипта MetaMask с интервалом {interval_minutes} минут. Следующий запуск: {next_run_time.strftime('%Y-%m-%d %H:%M:%S')}"
 
+Write-Host "Начало создания задачи..."
+
 # Создаем BAT-файл для надежного запуска
+Write-Host "Создание BAT-файла..."
 $batContent = @"
 @echo off
 chcp 65001 > nul
 call "$projectRoot\\.venv\\Scripts\\activate.bat"
 python "$projectRoot\\main.py" --scheduled-task >> "$logPath" 2>&1
 "@
-$batContent | Out-File "$projectRoot\\automation\\run_task.bat" -Encoding UTF8
+try {{
+    $batContent | Out-File "$projectRoot\\automation\\run_task.bat" -Encoding UTF8
+    Write-Host "BAT-файл успешно создан"
+}} catch {{
+    Write-Host "Ошибка при создании BAT-файла: $_"
+    exit 1
+}}
 
 # Создаем папку для задач если её нет
+Write-Host "Проверка папки для задач..."
 $taskFolderPath = $taskFolder.TrimEnd('\')
 $taskFolderExists = Get-ScheduledTask -TaskPath $taskFolderPath -ErrorAction SilentlyContinue
 if (-not $taskFolderExists) {{
-    $null = New-Item -Path "C:\\Windows\\System32\\Tasks$taskFolderPath" -ItemType Directory -Force
-    if ($?) {{
-        Write-Host "Папка $taskFolderPath успешно создана"
-    }} else {{
-        Write-Host "Ошибка при создании папки $taskFolderPath"
+    Write-Host "Создание папки для задач..."
+    try {{
+        $null = New-Item -Path "C:\\Windows\\System32\\Tasks$taskFolderPath" -ItemType Directory -Force
+        if ($?) {{
+            Write-Host "Папка $taskFolderPath успешно создана"
+        }} else {{
+            Write-Host "Ошибка при создании папки $taskFolderPath"
+            exit 1
+        }}
+    }} catch {{
+        Write-Host "Ошибка при создании папки: $_"
         exit 1
     }}
+}} else {{
+    Write-Host "Папка $taskFolderPath уже существует"
 }}
 
 # Создаем задачу
-$action = New-ScheduledTaskAction `
-    -Execute "cmd.exe" `
-    -Argument "/c `"$projectRoot\\automation\\run_task.bat`"" `
-    -WorkingDirectory $projectRoot
+Write-Host "Создание задачи..."
+try {{
+    $action = New-ScheduledTaskAction `
+        -Execute "cmd.exe" `
+        -Argument "/c `"$projectRoot\\automation\\run_task.bat`"" `
+        -WorkingDirectory $projectRoot
 
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes({interval_minutes})
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes({interval_minutes})
 
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable `
-    -ExecutionTimeLimit (New-TimeSpan -Days 365) `
-    -RestartCount 3 `
-    -RestartInterval (New-TimeSpan -Minutes 1)
+    $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit (New-TimeSpan -Days 365) `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1)
 
-$principal = New-ScheduledTaskPrincipal `
-    -UserId (whoami) `
-    -LogonType Interactive `
-    -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId (whoami) `
+        -LogonType Interactive `
+        -RunLevel Highest
 
-# Регистрируем задачу
-Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -Confirm:$false -ErrorAction SilentlyContinue
-Register-ScheduledTask `
-    -TaskName $taskName `
-    -TaskPath $taskFolder `
-    -Action $action `
-    -Trigger $trigger `
-    -Principal $principal `
-    -Settings $settings `
-    -Description $description `
-    -Force
+    # Регистрируем задачу
+    Write-Host "Регистрация задачи..."
+    Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -Confirm:$false -ErrorAction SilentlyContinue
+    Register-ScheduledTask `
+        -TaskName $taskName `
+        -TaskPath $taskFolder `
+        -Action $action `
+        -Trigger $trigger `
+        -Principal $principal `
+        -Settings $settings `
+        -Description $description `
+        -Force
+
+    Write-Host "Задача успешно создана"
+}} catch {{
+    Write-Host "Ошибка при создании задачи: $_"
+    Write-Host "Детали ошибки:"
+    Write-Host "  Сообщение: $($_.Exception.Message)"
+    Write-Host "  Тип: $($_.Exception.GetType().FullName)"
+    Write-Host "  Код: $($_.Exception.HResult)"
+    exit 1
+}}
 
 Write-Host "SUCCESS"
 """)
