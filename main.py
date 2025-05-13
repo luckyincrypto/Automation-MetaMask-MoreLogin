@@ -14,7 +14,7 @@ import openpyxl
 from openpyxl import Workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
-from automation.run_automation import schedule_next_run
+from automation.run_automation import schedule_next_run, check_auto_mode
 from database import process_activity, DatabaseError, process_random_profile
 
 # Локальные модули
@@ -27,7 +27,8 @@ from config import (
 )
 from MoreLogin.browser_manager import BrowserManager
 
-
+# Проверяем режим работы в начале выполнения
+check_auto_mode()
 
 def create_password():
     """Создает надежный пароль длиной 22 символа, включающий буквы, цифры и специальные символы."""
@@ -429,9 +430,8 @@ async def main():
         # Проверяем режим работы
         if GLOBAL_SETTINGS.get('AUTO_MODE', False):  # Если включен автоматический режим в config.yaml
 
-            logger.info("Установка в расписание для следующего запуска в автоматическом режиме.")
-            schedule_next_run()
-            logger.info("Запуск скрипта в автоматическом режиме установлен.")
+            # logger.info("Установка в расписание для следующего запуска в автоматическом режиме.")
+            schedule_next_run()  # Установка в расписание для следующего запуска в автоматическом режиме.
 
             # Получаем один рандомный аккаунт
             logger.info("Автоматический режим: выбор аккаунта из базы данных")
@@ -550,12 +550,7 @@ async def main():
         else:
             profile_word = "профилей"
 
-        logger.info(f"\n Успешно обработано {count_profile} {profile_word} из {len(profiles)}")
-
-        # # После успешного выполнения, если включен AUTO_MODE, планируем следующий запуск
-        # if AUTO_MODE:
-        #     schedule_next_run()
-
+        logger.info(f"\n Успешно обработано {count_profile} {profile_word} из {len(profiles)}\n")
 
 
 if __name__ == "__main__":
