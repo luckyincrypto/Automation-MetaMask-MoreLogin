@@ -40,7 +40,7 @@ def setup_logging(log_level="DEBUG"):
 
         # Проверка наличия обработчиков
         if not logger.hasHandlers():
-            # Настройка обработчика консоли
+            # Настройка обработчика консоли с цветным выводом
             console_handler = colorlog.StreamHandler(sys.stdout)
             console_handler.setLevel(
                 getattr(logging, log_level.upper(), logging.DEBUG))  # Установка уровня из параметра
@@ -48,7 +48,7 @@ def setup_logging(log_level="DEBUG"):
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)
 
-            # Настройка обработчика файла
+            # Настройка обработчика файла без цветного вывода
             file_handler = logging.FileHandler('app.log', encoding="utf-8")
             file_handler.setLevel(LOG_LEVEL_FILE)
             file_formatter = logging.Formatter(LOG_FORMAT_FILE)

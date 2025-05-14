@@ -23,9 +23,12 @@ def run_powershell_script(script_name):
             text=True,
             check=True
         )
-        logger.debug(f"Вывод PowerShell скрипта {script_name}:")
-        logger.debug(f"stdout: {result.stdout}")
-        logger.debug(f"stderr: {result.stderr}")
+
+        # Логируем вывод PowerShell скрипта
+        if result.stdout:
+            logger.info(f"PowerShell скрипт {script_name} stdout: {result.stdout}")
+        if result.stderr:
+            logger.info(f"PowerShell скрипт {script_name} stderr: {result.stderr}")
 
         # Проверяем наличие ошибок в stderr
         if result.stderr and not "Access is denied" in result.stderr:
@@ -57,12 +60,11 @@ def check_auto_mode():
         is_scheduled_task = "--scheduled-task" in sys.argv
         logger.debug(f"Проверка запуска из Task Scheduler: {is_scheduled_task}")
 
-        if is_scheduled_task:
-            logger.info("AUTO_MODE отключен и скрипт запущен из Task Scheduler. Завершение работы.")
-            # Удаляем задачу из планировщика
-            temp_script = PROJECT_ROOT / "automation" / "temp_uninstall.ps1"
-            with open(temp_script, "w", encoding='utf-8') as f:
-                f.write("""#Requires -RunAsAdministrator
+        # Удаляем задачу из планировщика в любом случае, если AUTO_MODE выключен
+        logger.info("Отключение автоматического режима")
+        temp_script = PROJECT_ROOT / "automation" / "temp_uninstall.ps1"
+        with open(temp_script, "w", encoding='utf-8') as f:
+            f.write("""#Requires -RunAsAdministrator
 
 # Проверяем права администратора
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -124,16 +126,17 @@ if (-not $taskStillExists) {
     exit 1
 }
 """)
-            result = run_powershell_script("temp_uninstall.ps1")
-            temp_script.unlink(missing_ok=True)
+        result = run_powershell_script("temp_uninstall.ps1")
+        temp_script.unlink(missing_ok=True)
 
-            # Проверяем, что задача действительно удалена
-            if result:
-                logger.info("Задача успешно удалена из Task Scheduler")
-                sys.exit(0)
-            else:
-                logger.error("Не удалось удалить задачу из Task Scheduler")
-                sys.exit(1)
+        if result:
+            logger.info("Задача успешно удалена из Task Scheduler")
+        else:
+            logger.error("Не удалось удалить задачу из Task Scheduler")
+
+        if is_scheduled_task:
+            logger.info("AUTO_MODE отключен и скрипт запущен из Task Scheduler. Завершение работы.")
+            sys.exit(0)
         else:
             logger.info("AUTO_MODE отключен, но скрипт запущен вручную. Продолжаем работу в интерактивном режиме.")
 
