@@ -396,7 +396,10 @@ async def operationEnv(
                 # Проверка БД на предмет наступления времени в необходимости выполнения активности faucet_morkie
                 # и занесением результата в БД.
                 try:
-                    process_activity(driver, wallet_mm_from_browser_extension, row)
+                    if wallet_mm_from_browser_extension:
+                        process_activity(driver, wallet_mm_from_browser_extension, row)
+                    else:
+                        process_activity(driver, mm_address, row)
                 except DatabaseError as e:
                     logger.error(f"Database error in operationEnv: {e}")
                     raise

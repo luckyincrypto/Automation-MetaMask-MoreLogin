@@ -227,6 +227,16 @@ class SQLiteDatabase:
                     logger.error(f"Ошибка парсинга времени следующей попытки для Профиля № {row}: {e}")
                     return True, "Invalid next_attempt time format"
 
+            # Обработка статуса 'error' и других неожиданных статусов
+            if last_activity['status'] == 'error' or last_activity['status'] not in ['success', 'limit_exceeded']:
+                logger.warning(f"Неожиданный статус для Профиля № {row}: {last_activity['status']}")
+                # Проверяем настройки из config
+                if hasattr(config, 'activity_settings') and config.activity_settings.get('AUTO_PROCESS_UNEXPECTED_STATUS', True):
+                    return True, f"Unexpected status: {last_activity['status']}"
+                else:
+                    logger.warning(f"Автоматическая обработка неожиданных статусов отключена. Статус: {last_activity['status']}")
+                    return False, f"Unexpected status: {last_activity['status']} (auto-processing disabled)"
+
             # Для других статусов
             logger.warning(f"Неожиданный статус для Профиля № {row}: {last_activity['status']}")
             return True, f"Unexpected status: {last_activity['status']}"
@@ -402,7 +412,7 @@ class SQLiteDatabase:
             with self._get_connection() as conn:
                 # Получаем все профили из базы
                 cursor = conn.execute("""
-                    SELECT DISTINCT profile_number, wallet_address 
+                    SELECT DISTINCT profile_number, wallet_address
                     FROM activities
                     ORDER BY profile_number
                 """)
@@ -464,7 +474,7 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
 
             # Если статус неожиданный, проверяем настройки
             if "Unexpected status" in reason:
-                if not config.ACTIVITY_SETTINGS['AUTO_PROCESS_UNEXPECTED_STATUS']:
+                if not config.activity_settings['AUTO_PROCESS_UNEXPECTED_STATUS']:
                     logger.warning(f"Unexpected status for Профиль № {row}. Reason: {reason}")
                     user_choice = input("Do you want to process this activity? (y/n): ").lower()
                     if user_choice != 'y':

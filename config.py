@@ -106,6 +106,9 @@ class Config:
         self.success_wait_time = self.activity_settings.get("SUCCESS_WAIT_TIME", {"HOURS": 24, "MINUTES": 3})
         self.max_records_per_profile = self.activity_settings.get("MAX_RECORDS_PER_PROFILE", 35)
 
+        # Экспортируем настройки активности
+        self.ACTIVITY_SETTINGS = self.activity_settings
+
 
 # Создаем экземпляр конфигурации
 config = Config()
@@ -127,6 +130,7 @@ DB_NAME = f"{config.db_name}.sqlite3"  # Для SQLite Database и PostgreSQL
 
 # Настройки из YAML
 GLOBAL_SETTINGS = config.global_settings # Глобальные настройки скрипта
+ACTIVITY_SETTINGS = config.activity_settings # Настройки обработки активностей MonadFaucet
 MODE_CLOSE_PROFILE = config.mode_close_profile  # Закрывать профиль после выполнения: TRUE/FALSE
 MIX_PROFILES = config.mix_profiles  # Перемешивать профили при обработке нескольких: TRUE/FALSE
 PROFILE_DELAY = config.profile_delay   # Задержка между профилями
