@@ -380,6 +380,7 @@ async def operationEnv(
 
         if modify_file_runtimelavamoat(env_id):
             try:
+
                 wallet_mm_from_browser_extension = helper.meta_mask(
                     seed,
                     password,
@@ -408,6 +409,7 @@ async def operationEnv(
                     raise
 
                 # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
+                # helper.open_tab("https://faucet.morkie.xyz/monad")
                 helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
                 helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 

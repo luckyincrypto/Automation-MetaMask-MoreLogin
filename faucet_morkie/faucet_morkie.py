@@ -2,6 +2,7 @@ import time
 import random
 import re
 from datetime import datetime, timedelta
+from pprint import pprint
 from typing import Dict, Any, Optional
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -31,39 +32,36 @@ class MonadFaucet:
         return delay * random.uniform(0.8, 1.2)
 
     @staticmethod
-    def input_eth_address(driver: Any, mm_address: str) -> bool:
+    def input_eth_address(driver: Any, element, mm_address: str) -> bool:
         """Robust Ethereum address input using SeleniumUtilities."""
-        selectors = [
-            "//input[contains(@placeholder, 'EVM Address')]",
-            "//input[contains(@placeholder, 'Enter your EVM Address')]",
-            "//input[contains(@aria-label, 'Ethereum address')]",
-            "//input[@type='text' and contains(@class, 'border-gray-300')]"
-        ]
+        # selectors = [
+        #     "//input[contains(@placeholder, 'EVM Address')]",
+        #     "//input[contains(@placeholder, 'Enter your EVM Address')]",
+        #     "//input[contains(@aria-label, 'Ethereum address')]",
+        #     "//input[@type='text' and contains(@class, 'border-gray-300')]"
+        # ]
 
-        for selector in selectors:
-            input_field = SeleniumUtilities.find_element_safely(driver, By.XPATH, selector)
-            if not input_field:
-                continue
+        # for selector in selectors:
+        #     input_field = SeleniumUtilities.find_element_safely(driver, By.XPATH, selector)
+        #     if not input_field:
+        #         continue
 
-            try:
-                # Clear field thoroughly
-                input_field.clear()
-                for _ in range(3):
-                    input_field.send_keys(Keys.BACKSPACE)
-                    time.sleep(0.1)
+        try:
+            # Clear field thoroughly
+            element.clear()
+            for _ in range(3):
+                element.send_keys(Keys.BACKSPACE)
+                time.sleep(0.1)
 
-                # Input address with verification
-                for char in mm_address:
-                    input_field.send_keys(char)
-                    time.sleep(0.05)
+            # Input address with verification
+            element.send_keys(mm_address)
 
-                if (current_value := input_field.get_attribute('value') or "").lower() == mm_address.lower():
-                    return True
+            if (current_value := element.get_attribute('value') or "").lower() == mm_address.lower():
+                return True
 
-                logger.warning("Address mismatch. Expected: %s, Got: %s", mm_address, current_value)
-            except Exception as e:
-                logger.debug("Input error with selector %s: %s", selector, str(e))
-                continue
+            logger.warning("Address mismatch. Expected: %s, Got: %s", mm_address, current_value)
+        except Exception as e:
+            logger.debug("Input error with selector %s: %s", element, str(e))
 
         logger.error("All address input attempts failed")
         return False
@@ -82,9 +80,80 @@ class MonadFaucet:
             logger.error("Failed to parse wait time '%s': %s", wait_str, str(e))
             return None
 
+    # @staticmethod
+    # def get_faucet_status(driver: Any) -> Dict[str, Any]:
+    #     """Comprehensive status detection using SeleniumUtilities."""
+    #     STATUS_PATTERNS = {
+    #         'limit_exceeded': [
+    #             r'Too many requests',
+    #             r'Claim limit exceeded',
+    #             r'Claim limit reached',
+    #             r'Try again in \d+h \d+m',
+    #             r'Please try again later'
+    #         ],
+    #         'require_morkie_id': [
+    #             r'You need a Morkie ID',
+    #             r'Morkie ID required'
+    #         ],
+    #         'failed': [
+    #             r'Transaction failed',
+    #             r'Failed to process',
+    #             r'Failed to send transaction',
+    #             r'Too many requests. Please try again later.',
+    #             r'Network error. Check your connection and try again.'
+    #         ],
+    #         'success': [
+    #             r'Success!',
+    #             r'Transaction:',
+    #             r'Check your wallet'
+    #         ]
+    #     }
+    #
+    #     try:
+    #         # Multiple selectors for status messages
+    #         message_element = SeleniumUtilities.find_element_safely(
+    #             driver,
+    #             By.XPATH,
+    #             "//div[contains(@class, 'border-berryBlackmail')]//div[contains(@class, 'rounded-lg')] | "
+    #             "//div[contains(@class, 'alert')] | "
+    #             "//div[contains(@class, 'message') | body > div.min-h-screen > section > div > div.p-3.rounded-lg.mb-2.bg-yellow-900\/30.text-yellow-400]",
+    #             timeout=5
+    #         )
+    #
+    #         if not message_element:
+    #             return {'status': 'unknown', 'message': 'No status message found'}
+    #
+    #         message_text = message_element.text.strip()
+    #         result = {'message': message_text, 'status': 'unknown'}
+    #
+    #         # Check all status patterns
+    #         for status, patterns in STATUS_PATTERNS.items():
+    #             if any(re.search(pattern, message_text, re.IGNORECASE) for pattern in patterns):
+    #                 result['status'] = status
+    #                 break
+    #
+    #         # Additional data processing
+    #         if result['status'] == 'limit_exceeded':
+    #             if (wait_match := re.search(r'in (\d+h \d+m|\d+h|\d+m)', message_text)):
+    #                 if (wait_delta := MonadFaucet.parse_wait_time(wait_match.group(1))):
+    #                     result["next_attempt"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
+    #
+    #         elif result['status'] == 'success':
+    #             if (
+    #             tx_element := SeleniumUtilities.find_element_safely(driver, By.XPATH, ".//a[contains(@href, 'tx/')]")):
+    #                 if (href := tx_element.get_attribute('href')):
+    #                     result['transaction'] = href.split('/tx/')[-1][:64]
+    #
+    #         return result
+    #
+    #     except Exception as e:
+    #         logger.error("Status check failed: %s", str(e))
+    #         return {'status': 'error', 'message': str(e)}
+
     @staticmethod
-    def get_faucet_status(driver: Any) -> Dict[str, Any]:
-        """Comprehensive status detection using SeleniumUtilities."""
+    def get_faucet_status(driver: Any, main_block) -> Dict[str, Any]:
+        """Определяет статус транзакции, используя find_text()."""
+
         STATUS_PATTERNS = {
             'limit_exceeded': [
                 r'Too many requests',
@@ -112,34 +181,25 @@ class MonadFaucet:
         }
 
         try:
-            # Multiple selectors for status messages
-            message_element = SeleniumUtilities.find_element_safely(
-                driver,
-                By.XPATH,
-                "//div[contains(@class, 'border-berryBlackmail')]//div[contains(@class, 'rounded-lg')] | "
-                "//div[contains(@class, 'alert')] | "
-                "//div[contains(@class, 'message')]",
-                timeout=5
-            )
+            # 📌 Используем `find_text()` вместо `find_element_safely()`
+            text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
 
-            if not message_element:
-                return {'status': 'unknown', 'message': 'No status message found'}
-
-            message_text = message_element.text.strip()
+            message_text = text_result['message']
             result = {'message': message_text, 'status': 'unknown'}
 
-            # Check all status patterns
+            # 📌 Проверяем статус по шаблонам
             for status, patterns in STATUS_PATTERNS.items():
                 if any(re.search(pattern, message_text, re.IGNORECASE) for pattern in patterns):
                     result['status'] = status
                     break
 
-            # Additional data processing
+            # ⏳ Если статус 'limit_exceeded', извлекаем время ожидания
             if result['status'] == 'limit_exceeded':
                 if (wait_match := re.search(r'in (\d+h \d+m|\d+h|\d+m)', message_text)):
                     if (wait_delta := MonadFaucet.parse_wait_time(wait_match.group(1))):
                         result["next_attempt"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
 
+            # 🔗 Если статус 'success', ищем транзакцию
             elif result['status'] == 'success':
                 if (
                 tx_element := SeleniumUtilities.find_element_safely(driver, By.XPATH, ".//a[contains(@href, 'tx/')]")):
@@ -152,6 +212,7 @@ class MonadFaucet:
             logger.error("Status check failed: %s", str(e))
             return {'status': 'error', 'message': str(e)}
 
+
     @staticmethod
     def process_claim(driver: Any, wallet_address: str) -> Dict[str, Any]:
         """Complete claim process with intelligent retry logic."""
@@ -162,36 +223,28 @@ class MonadFaucet:
                 if not SeleniumUtilities.find_element_safely(driver, By.XPATH, "//body", timeout=10):
                     raise Exception("Page failed to load")
 
-                claim_btn = SeleniumUtilities.find_button_by_text(driver, 'Claim')
-                if not claim_btn or not SeleniumUtilities.click_safely(claim_btn):
-                    raise Exception("Failed to interact with claim button")
-
-                address_field = SeleniumUtilities.find_element_safely(
+                # Find main block
+                main_block = SeleniumUtilities.find_element_safely(
                     driver,
                     By.XPATH,
-                    "//input[contains(@placeholder, 'EVM Address')]",
+                    "//div[contains(@class, 'border-berryBlackmail')]",
                     timeout=5
                 )
-                if not address_field:
-                    raise Exception("Address field not revealed")
 
-                if not MonadFaucet.input_eth_address(driver, wallet_address):
-                    raise Exception("Address input failed")
+                text_btn = 'Claim'
+                SeleniumUtilities.find_click_button(main_block, text_btn)
 
-                # Send transaction
-                send_btn = SeleniumUtilities.find_button_by_text(driver, 'Send')
-                claim_btn = SeleniumUtilities.find_button_by_text(driver, 'Claim')
+                aria_label = 'Ethereum address input'
+                SeleniumUtilities.find_input_field_click_paste(main_block, aria_label, wallet_address)
 
-                if send_btn and SeleniumUtilities.click_safely(send_btn):
-                    logger.debug("Clicked 'Send' button")
-                elif claim_btn and SeleniumUtilities.click_safely(claim_btn):
-                    logger.debug("Clicked 'Claim' button")
-                else:
-                    raise Exception("Failed to find and click transaction button")
+                text_btn = 'Claim'
+                SeleniumUtilities.find_click_button(main_block, text_btn)
 
-                # Process result
                 time.sleep(3)  # Wait for transaction processing
-                result = MonadFaucet.get_faucet_status(driver)
+                if SeleniumUtilities.handle_element_obstruction(driver, main_block):
+                    logger.debug("Мешающие окна закрыты, проверяем результат...")
+
+                result = MonadFaucet.get_faucet_status(driver, main_block)
 
                 # Ensure all required fields are present
                 result.update({
@@ -265,115 +318,3 @@ class MonadFaucet:
                 'message': str(e),
                 'wallet_address': wallet_address
             }
-
-    @staticmethod
-    def parse_faucet_block(driver: Any) -> Dict[str, Any]:
-        """
-        Parse the main faucet block and extract all relevant elements.
-        Returns a dictionary containing buttons, input fields, and status information.
-        """
-        result = {
-            'buttons': [],
-            'input_fields': [],
-            'status_info': None,
-            'tier_info': None,
-            'transaction_info': None,
-            'initial_claim_button': None
-        }
-
-        try:
-            # Find main block
-            main_block = SeleniumUtilities.find_element_safely(
-                driver,
-                By.XPATH,
-                "//div[contains(@class, 'border-berryBlackmail')]",
-                timeout=5
-            )
-
-            if not main_block:
-                logger.error("Main faucet block not found")
-                return result
-
-            # Find initial claim button
-            initial_claim_btn = SeleniumUtilities.find_element_safely(
-                main_block,
-                By.XPATH,
-                ".//button[contains(@class, 'primary-btn') and contains(text(), 'Claim')]"
-            )
-
-            if initial_claim_btn:
-                result['initial_claim_button'] = {
-                    'text': initial_claim_btn.text.strip(),
-                    'element': initial_claim_btn,
-                    'aria_label': initial_claim_btn.get_attribute('aria-label'),
-                    'class': initial_claim_btn.get_attribute('class')
-                }
-                logger.debug("Found initial claim button: %s", initial_claim_btn.text.strip())
-
-            # Find all buttons
-            buttons = main_block.find_elements(By.TAG_NAME, "button")
-            for btn in buttons:
-                btn_info = {
-                    'text': btn.text.strip(),
-                    'element': btn,
-                    'aria_label': btn.get_attribute('aria-label'),
-                    'class': btn.get_attribute('class')
-                }
-                result['buttons'].append(btn_info)
-
-            # Find all input fields
-            input_fields = main_block.find_elements(By.TAG_NAME, "input")
-            for input_field in input_fields:
-                input_info = {
-                    'placeholder': input_field.get_attribute('placeholder'),
-                    'value': input_field.get_attribute('value'),
-                    'element': input_field,
-                    'aria_label': input_field.get_attribute('aria-label')
-                }
-                result['input_fields'].append(input_info)
-
-            # Find tier information
-            tier_div = SeleniumUtilities.find_element_safely(
-                main_block,
-                By.XPATH,
-                ".//div[contains(@class, 'bg-indigo-900/30')]"
-            )
-            if tier_div:
-                result['tier_info'] = {
-                    'text': tier_div.text.strip(),
-                    'element': tier_div
-                }
-
-            # Find status information
-            status_divs = main_block.find_elements(
-                By.XPATH,
-                ".//div[contains(@class, 'bg-green-900/40') or contains(@class, 'bg-red-900/40')]"
-            )
-            for status_div in status_divs:
-                status_info = {
-                    'text': status_div.text.strip(),
-                    'element': status_div,
-                    'class': status_div.get_attribute('class')
-                }
-
-                # Check for transaction link
-                tx_link = SeleniumUtilities.find_element_safely(
-                    status_div,
-                    By.XPATH,
-                    ".//a[contains(@href, 'tx/')]"
-                )
-                if tx_link:
-                    status_info['transaction'] = {
-                        'hash': tx_link.text.strip(),
-                        'url': tx_link.get_attribute('href')
-                    }
-
-                result['status_info'] = status_info
-                break
-
-            logger.debug("Successfully parsed faucet block")
-            return result
-
-        except Exception as e:
-            logger.error("Failed to parse faucet block: %s", str(e))
-            return result

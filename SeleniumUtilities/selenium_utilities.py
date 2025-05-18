@@ -1,9 +1,12 @@
 import time
 import random
+
+from selenium.webdriver import Keys
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException)
+from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException, NoSuchElementException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
+from typing import Dict, List, Optional
 from config import logger  # Подключение конфигурации логгера
 
 
@@ -43,6 +46,32 @@ class SeleniumUtilities:
         except Exception as e:
             logger.error(f"Error finding element '{selector}': {e}")
             return None
+
+    @staticmethod
+    def find_elements_safely(driver, by, selector, timeout=10):
+        """
+        Найти несколько элементов безопасно, без выброса исключений.
+
+        Args:
+            driver: Selenium WebDriver instance.
+            by: Метод поиска (например, By.XPATH, By.ID).
+            selector: Селектор элементов.
+            timeout: Максимальное время ожидания элементов в секундах.
+
+        Returns:
+            List[WebElement], если найдены, иначе пустой список.
+        """
+        try:
+            wait = WebDriverWait(driver, timeout)
+            elements = wait.until(EC.presence_of_all_elements_located((by, selector)))
+            return elements
+        except TimeoutException:
+            logger.debug(f"Elements '{selector}' not found after {timeout} seconds")
+            return []
+        except Exception as e:
+            logger.error(f"Error finding elements '{selector}': {e}")
+            return []
+
 
     @staticmethod
     def click_safely(element, retry_count=3, base_delay=1, jitter_range=(0.8, 1.2), exp_factor=2):
@@ -102,18 +131,169 @@ class SeleniumUtilities:
         xpath = f"//button[contains(normalize-space(text()), '{text}')]"
         return SeleniumUtilities.find_element_safely(driver, By.XPATH, xpath, timeout=timeout)
 
+    @staticmethod
+    def parse_interactive_elements(main_block) -> Dict[str, List[Dict]]:
+        """Парсит блок, извлекая текст, кнопки и поля ввода с их метками."""
 
+        def get_xpath(element) -> str:
+            """Генерирует XPath для элемента (упрощенная версия)."""
+            classes = element.get_attribute("class")
+            element_id = element.get_attribute("id")
+            if element_id:
+                return f"//{element.tag_name}[@id='{element_id}']"
+            if classes:
+                return f"//{element.tag_name}[contains(@class, '{classes.split()[0]}')]"
+            return f"//{element.tag_name}"
 
+        result = {"elements_info": []} # Все элементы с их описанием и локатором
 
+        if not main_block:
+            logger.error("main_block is None, cannot parse elements")
+            return {"elements_info": []}
 
-# Пример использования модуля
-# try:
-#     # Пример использования функций
-#     button = SeleniumUtilities.find_button_by_text(driver, "Submit", timeout=10)
-#     if button:
-#         text = SeleniumUtilities.find_element_safely(driver, by, selector)
-#         print(f"Text: {text}")
-#         if SeleniumUtilities.click_safely(button):
-#             print("Button clicked successfully")
-# finally:
-#     driver.quit()
+        # 1. Собираем все элементы внутри main_block
+        all_elements = main_block.find_elements(By.XPATH, ".//*")  # Все вложенные элементы
+        if not all_elements:
+            logger.warning("main_block не содержит элементов")
+            return result
+
+        for element in all_elements:
+
+            element_info = {
+                "tag_name": element.tag_name,
+                "element": element,
+                "text": element.text.strip() if element.text else "",
+                "is_button": element.tag_name.lower() == "button",  # Является ли сам элемент кнопкой?
+                "is_input_field": element.tag_name.lower() in ["input", "textarea"],
+                "classes": element.get_attribute("class") or "",
+                "aria_label": element.get_attribute("aria-label") or "",
+                "xpath": get_xpath(element)
+            }
+            result["elements_info"].append(element_info)
+
+        return result
+
+    @staticmethod
+    def find_click_button(main_block, text_btn):
+        """Ищет и безопасно кликает по кнопке, выполняя повторный клик при необходимости."""
+        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+
+        for el in parsed_data['elements_info']:
+            try:
+                if el['is_button'] and el['text'] and isinstance(el['text'], str) and text_btn in el['text'].strip():
+                    if el['element'] and el['element'].is_displayed() and el['element'].is_enabled():
+                        logger.debug(f"Попытка клика по кнопке с текстом: {el['text']}, XPath: {el['xpath']}")
+
+                        if SeleniumUtilities.click_safely(el['element']):
+                            logger.debug("Клик по кнопке успешен")
+                            time.sleep(2)  # Подождем перед повторным кликом
+
+                            # 🔄 Проверяем, существует ли элемент после клика
+                            try:
+                                el['element'] = main_block.find_element(By.XPATH, el['xpath'])
+                                if el['element'].is_displayed() and el['element'].is_enabled():
+                                    if SeleniumUtilities.click_safely(el['element']):
+                                        logger.debug("Повторный клик успешно выполнен")
+                                    else:
+                                        logger.warning("Повторный клик не удался")
+                            except NoSuchElementException:
+                                logger.warning("Элемент исчез из DOM после первого клика, повторный клик невозможен")
+                        else:
+                            raise Exception("Failed to interact with claim button")
+                    else:
+                        raise Exception("Элемент отсутствует или неактивен")
+            except Exception as e:
+                logger.exception(f"Ошибка при взаимодействии с кнопкой {text_btn}: {str(e)}")
+
+    @staticmethod
+    def find_input_field_click_paste(main_block, aria_label, text_input):
+        """Ищет поле ввода по aria-label, кликает по нему и вставляет текст."""
+        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+
+        for el in parsed_data['elements_info']:
+            try:
+                if el['is_input_field'] and el['element'] and el['aria_label'].strip().lower() == aria_label.lower():
+                    if el['element'].is_displayed() and el['element'].is_enabled():
+                        logger.debug(f"Попытка взаимодействия с полем ввода '{aria_label}', XPath: {el['xpath']}")
+
+                        el['element'].click()
+                        el['element'].clear()
+                        el['element'].send_keys(text_input)
+
+                        logger.debug(f"Текст '{text_input}' успешно введен в поле '{aria_label}'")
+                        return True
+                    else:
+                        logger.warning(f"Поле '{aria_label}' недоступно для взаимодействия")
+            except Exception as e:
+                logger.exception(f"Ошибка при вводе текста в поле '{aria_label}': {str(e)}")
+
+        return False
+
+    @staticmethod
+    def find_text(main_block, text_input) -> Dict[str, str]:
+        """Парсит элементы и ищет текст, содержащий заданные слова или фразы."""
+        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+
+        for el in parsed_data['elements_info']:
+            try:
+                if el['text'] and isinstance(el['text'], str):
+                    normalized_text = el['text'].strip().lower()
+                    if any(word.lower() in normalized_text for word in text_input):
+                        logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
+                        return {"message": el["text"]}  # Возвращаем найденное значение полностью
+            except Exception as e:
+                logger.exception(f"Ошибка при поиске текста '{text_input}': {str(e)}")
+
+        return {"message": "Текст не найден"}
+
+    @staticmethod
+    def handle_element_obstruction(driver, element):
+        """Определяет, перекрыт ли нужный элемент и закрывает мешающие окна."""
+        try:
+            # 📌 Проверяем, не перекрыт ли элемент другим
+            is_obstructed = driver.execute_script("""
+                var elem = arguments[0];
+                var rect = elem.getBoundingClientRect();
+                var elemAtPoint = document.elementFromPoint(rect.x + rect.width/2, rect.y + rect.height/2);
+                return { "obstructed": elemAtPoint !== elem, "obstructing_element": elemAtPoint.tagName, "obstructing_classes": elemAtPoint.className };
+            """, element)
+
+            logger.debug(f"Проверка перекрытия: {is_obstructed}")
+
+            if is_obstructed["obstructed"]:
+                logger.warning(f"Элемент перекрыт другим: {is_obstructed}")
+                logger.warning("Ищем мешающие элементы...")
+
+                # 📌 Ищем мешающие элементы
+                obstructing_elements = driver.find_elements(By.XPATH,
+                                                            "//div[contains(@class, 'popup') or contains(@class, 'modal') or contains(@class, 'overlay') or contains(@class, 'dialog') or contains(@class, 'backdrop')]")
+
+                for obstr_elem in obstructing_elements:
+                    try:
+                        logger.debug(f"Попытка закрытия окна: {obstr_elem.get_attribute('class')}")
+
+                        # 🔄 Ищем кнопку закрытия
+                        close_buttons = obstr_elem.find_elements(By.XPATH,
+                                                                 ".//button[contains(text(), 'Close') or contains(@class, 'close')]")
+                        if close_buttons and close_buttons[0].is_displayed() and close_buttons[0].is_enabled():
+                            close_buttons[0].click()
+                            logger.debug("Мешающее окно закрыто!")
+                            time.sleep(1)  # 🔄 Даем время на обновление страницы
+
+                        # 📌 Если кнопка не найдена, пробуем `Esc`
+                        if not close_buttons:
+                            driver.send_keys(Keys.ESCAPE)
+                            logger.debug("Попытка закрытия через Escape")
+
+                        return True  # ✅ Обнаружено и закрыто
+
+                    except Exception as e:
+                        logger.warning(f"Не удалось закрыть окно: {str(e)}")
+
+            else:
+                logger.debug(f"Элемент НЕ перекрыт, можно кликнуть: {is_obstructed}")
+                return False  # ✅ Перекрытия нет
+
+        except Exception as e:
+            logger.error(f"Ошибка при проверке перекрытия элемента: {str(e)}")
+            return False
