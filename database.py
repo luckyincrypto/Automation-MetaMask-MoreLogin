@@ -268,7 +268,7 @@ class SQLiteDatabase:
                 'status': activity_data['status'],
                 'wallet_address': activity_data['wallet_address'],
                 'next_attempt': activity_data.get('next_attempt'),
-                'details': json.dumps(details)
+                'details': json.dumps(details, ensure_ascii=False)
             }
             logger.debug(f"Параметры для вставки: {json.dumps(params, indent=2, ensure_ascii=False)}")
 
