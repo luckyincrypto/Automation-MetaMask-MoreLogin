@@ -171,12 +171,13 @@ class MonadFaucet:
                 r'Failed to process',
                 r'Failed to send transaction',
                 r'Too many requests. Please try again later.',
-                r'Network error. Check your connection and try again.'
+                r'Network error. Check your connection and try again.',
+                r'error'
             ],
             'success': [
                 r'Success!',
                 r'Transaction:',
-                r'Check your wallet'
+                r'Success! Check your wallet.'
             ]
         }
 
@@ -185,7 +186,9 @@ class MonadFaucet:
             text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
 
             message_text = text_result['message']
+            print(f"Message text: {message_text}")  # Для отладки
             result = {'message': message_text, 'status': 'unknown'}
+            print(f"Result: {result}")  # Для отладки
 
             # 📌 Проверяем статус по шаблонам
             for status, patterns in STATUS_PATTERNS.items():
