@@ -6,7 +6,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException, NoSuchElementException)
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from config import logger  # Подключение конфигурации логгера
 
 
@@ -21,6 +21,33 @@ class SeleniumUtilities:
         self.driver.switch_to.new_window()
         self.driver.get(url)
         logger.debug(f"(open_tab) Открыта вкладка: {url}")
+
+    @staticmethod
+    def switch_to_new_window(driver, current_windows, timeout=15):
+        """
+        Ожидает появление нового окна/вкладки и переключается на него.
+
+        Параметры:
+            driver: экземпляр WebDriver
+            current_windows: текущие открытые окна
+            timeout: максимальное время ожидания в секундах (по умолчанию 10)
+
+        Возвращает:
+            handle нового окна
+        """
+
+        # Ждем появления нового окна
+        WebDriverWait(driver, timeout).until(EC.new_window_is_opened(current_windows))
+
+        # Получаем все окна после открытия нового
+        new_windows = driver.window_handles
+
+        # Находим handle нового окна
+        new_window = list(set(new_windows) - set(current_windows))[0]
+
+        # Переключаемся на новое окно
+        driver.switch_to.window(new_window)
+        return new_window
 
     @staticmethod
     def find_element_safely(driver, by, selector, timeout=10):
@@ -194,12 +221,16 @@ class SeleniumUtilities:
                                 if el['element'].is_displayed() and el['element'].is_enabled():
                                     if SeleniumUtilities.click_safely(el['element']):
                                         logger.debug("Повторный клик успешно выполнен")
+                                        return True
                                     else:
-                                        logger.warning("Повторный клик не удался")
+                                        logger.debug("Повторный клик не удался")
+                                        return True
                             except NoSuchElementException:
                                 logger.warning("Элемент исчез из DOM после первого клика, повторный клик невозможен")
+                                return True
                         else:
-                            raise Exception("Failed to interact with claim button")
+                            raise Exception("Failed to interact with button")
+
                     else:
                         raise Exception("Элемент отсутствует или неактивен")
             except Exception as e:
@@ -229,22 +260,53 @@ class SeleniumUtilities:
 
         return False
 
-    @staticmethod
-    def find_text(main_block, text_input) -> Dict[str, str]:
-        """Парсит элементы и ищет текст, содержащий заданные слова или фразы."""
-        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+    # @staticmethod
+    # def find_text(main_block, text_input) -> Dict[str, str]:
+    #     """Парсит элементы и ищет текст, содержащий заданные слова или фразы."""
+    #     parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+    #
+    #     for el in parsed_data['elements_info']:
+    #         try:
+    #             if el['text'] and isinstance(el['text'], str):
+    #                 normalized_text = el['text'].strip().lower()
+    #                 if any(word.lower() in normalized_text for word in text_input):
+    #                     logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
+    #                     return {"message": el["text"]}  # Возвращаем найденное значение полностью
+    #         except Exception as e:
+    #             logger.exception(f"Ошибка при поиске текста '{text_input}': {str(e)}")
+    #
+    #     return {"message": "Текст не найден"}
 
+    @staticmethod
+    def find_text(main_block, text_input, check_visibility=True) -> Dict[str, Any]:
+        """Поиск текста с проверкой видимости элементов"""
+        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+        logger.debug(f"Ищем текст: {text_input}")
+
+        found_elements = []
         for el in parsed_data['elements_info']:
             try:
                 if el['text'] and isinstance(el['text'], str):
-                    normalized_text = el['text'].strip().lower()
-                    if any(word.lower() in normalized_text for word in text_input):
-                        logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
-                        return {"message": el["text"]}  # Возвращаем найденное значение полностью
-            except Exception as e:
-                logger.exception(f"Ошибка при поиске текста '{text_input}': {str(e)}")
+                    text = el['text'].strip().lower()
+                    element = el['element']
 
-        return {"message": "Текст не найден"}
+                    # Проверка видимости
+                    if check_visibility and not element.is_displayed():
+                        logger.warning("Элемент не виден")
+                        continue
+
+                    # Поиск совпадений
+                    if any(word.lower() in text for word in text_input):
+                        found_elements.append(element)
+                        logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
+            except Exception as e:
+                logger.error(f"Ошибка: {str(e)}")
+
+        return {
+            "found": bool(found_elements),
+            "elements": found_elements,
+            "message": "Найдено совпадений: {}".format(len(found_elements)) if found_elements else "Текст не найден"
+        }
 
     @staticmethod
     def handle_element_obstruction(driver, element):
@@ -296,4 +358,46 @@ class SeleniumUtilities:
 
         except Exception as e:
             logger.error(f"Ошибка при проверке перекрытия элемента: {str(e)}")
+            return False
+
+    @staticmethod
+    def find_and_click_child_by_text(parent_element, child_text, partial_match=True):
+        """
+        Ищет дочерний элемент по заданному тексту внутри родительского элемента и кликает по нему.
+
+        Параметры:
+            parent_element: WebElement - родительский элемент, в котором будет производиться поиск
+            child_text: str - текст для поиска в дочерних элементах
+            partial_match: bool - если True, ищет частичное совпадение текста (по умолчанию True)
+
+        Возвращает:
+            bool - True, если элемент был найден и по нему кликнули, иначе False
+        """
+        try:
+            parsed_data = SeleniumUtilities.parse_interactive_elements(parent_element)
+
+            for el in parsed_data['elements_info']:
+                try:
+                    if el['text'] and isinstance(el['text'], str):
+                        element_text = el['text'].strip()
+                        text_match = (child_text.lower() in element_text.lower()) if partial_match \
+                            else (child_text.lower() == element_text.lower())
+
+                        if text_match and el['element'].is_displayed() and el['element'].is_enabled():
+                            logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
+
+                            if SeleniumUtilities.click_safely(el['element']):
+                                logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
+                                return True
+                            else:
+                                logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                except Exception as e:
+                    logger.exception(f"Ошибка при обработке элемента: {str(e)}")
+                    continue
+
+            logger.warning(f"Не найден кликабельный элемент с текстом: '{child_text}'")
+            return False
+
+        except Exception as e:
+            logger.exception(f"Ошибка в find_and_click_child_by_text: {str(e)}")
             return False

@@ -7,6 +7,8 @@ import traceback
 import pyperclip
 from selenium.webdriver import ActionChains, Keys
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Локальные модули
 from config import logger
@@ -425,4 +427,47 @@ class MetaMaskHelper(SeleniumUtilities):
             )
         return None
 
+    def handle_metamask_connection(self, driver):
+        try:
+            # 1. Переключаемся на последнее открытое окно
+            driver.switch_to.window(driver.window_handles[-1])
+            logger.info(f"Переключение на окно MetaMask, id: {driver.current_window_handle}")
 
+            # 2. Ждем загрузки страницы
+            time.sleep(3)
+
+            # 3. Получаем корневой элемент окна MetaMask
+            mm_root_element = self.find_element_safely(
+                driver,
+                By.XPATH,
+                "//body",
+                timeout=10
+            )
+            if not mm_root_element:
+                logger.error("Не удалось найти корневой элемент MetaMask")
+                return False
+
+            # 4. Ожидаем появления текста "Connect this website"
+            text_input = 'Connect this website'
+            if not self.find_text(mm_root_element, text_input):
+                logger.error(f"Не удалось найти текст '{text_input}'")
+                return False
+
+            # 5. Ищем и нажимаем кнопку Connect
+            text_btn = 'Connect'
+            if self.find_click_button(mm_root_element, text_btn):
+                logger.success("Кнопка Connect нажата успешно")
+                return True
+            else:
+                logger.error(f"Не удалось найти или нажать кнопку '{text_btn}'")
+                return False
+
+        except Exception as e:
+            logger.error(f"Ошибка подключения MetaMask: {str(e)}")
+            return False
+
+    # Использование:
+    # if handle_metamask_connection(driver):
+    #     logger.info("Подключение выполнено")
+    # else:
+    #     logger.error("Не удалось завершить подключение")
