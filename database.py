@@ -248,7 +248,7 @@ class SQLiteDatabase:
         """Вставляет активность с указанием номера строки используя существующее соединение"""
         try:
             logger.debug(f"Начало вставки данных для Профиля № {row}")
-            logger.debug(f"Полученные данные: {json.dumps(activity_data, indent=2, ensure_ascii=False)}")
+            # logger.debug(f"Полученные данные: {json.dumps(activity_data, indent=2, ensure_ascii=False)}")
 
             self._validate_activity_data(activity_data)
             activity_data['profile_number'] = row
@@ -259,7 +259,7 @@ class SQLiteDatabase:
             for field in fields_to_exclude:
                 details.pop(field, None)
 
-            logger.debug(f"Подготовленные данные для вставки: {json.dumps(details, indent=2, ensure_ascii=False)}")
+            # logger.debug(f"Подготовленные данные для вставки: {json.dumps(details, indent=2, ensure_ascii=False)}")
 
             # Подготовка параметров для вставки
             params = {
@@ -270,7 +270,7 @@ class SQLiteDatabase:
                 'next_attempt': activity_data.get('next_attempt'),
                 'details': json.dumps(details, ensure_ascii=False)
             }
-            logger.debug(f"Параметры для вставки: {json.dumps(params, indent=2, ensure_ascii=False)}")
+            # logger.debug(f"Параметры для вставки: {json.dumps(params, indent=2, ensure_ascii=False)}")
 
             # Выполнение вставки
             cursor = conn.execute("""
@@ -485,7 +485,7 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
             try:
                 logger.debug(f"Вызов MonadFaucet.process для Профиля № {row}")
                 result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-                logger.debug(f"Результат MonadFaucet.process: {json.dumps(result, indent=2, ensure_ascii=False)}")
+                # logger.debug(f"Результат MonadFaucet.process: {json.dumps(result, indent=2, ensure_ascii=False)}")
 
                 logger.update(f"Результат выполнения активности для Профиля № {row}: {result}")
 

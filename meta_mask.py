@@ -2,6 +2,7 @@
 import platform
 import time
 import traceback
+from pprint import pprint
 
 # Сторонние библиотеки
 import pyperclip
@@ -443,31 +444,80 @@ class MetaMaskHelper(SeleniumUtilities):
                 "//body",
                 timeout=10
             )
+
             if not mm_root_element:
                 logger.error("Не удалось найти корневой элемент MetaMask")
                 return False
-
-            # 4. Ожидаем появления текста "Connect this website"
-            text_input = 'Connect this website'
-            if not self.find_text(mm_root_element, text_input):
-                logger.error(f"Не удалось найти текст '{text_input}'")
-                return False
-
-            # 5. Ищем и нажимаем кнопку Connect
-            text_btn = 'Connect'
-            if self.find_click_button(mm_root_element, text_btn):
-                logger.success("Кнопка Connect нажата успешно")
+            text_btn = 'Conne' # Текст кнопки подключения? 5 символов, настойка в SeleniumUtilities.find_click_button
+            if SeleniumUtilities.find_click_button(mm_root_element, text_btn):
                 return True
             else:
-                logger.error(f"Не удалось найти или нажать кнопку '{text_btn}'")
                 return False
 
         except Exception as e:
             logger.error(f"Ошибка подключения MetaMask: {str(e)}")
             return False
 
-    # Использование:
-    # if handle_metamask_connection(driver):
-    #     logger.info("Подключение выполнено")
-    # else:
-    #     logger.error("Не удалось завершить подключение")
+    def find_wallet_info(self, selector, timeout=10):
+        """
+        Находит информацию о кошельке или кнопку подключения.
+
+        Args:
+            selector: str - CSS селектор для поиска адреса кошелька
+            timeout: int - максимальное время ожидания элемента в секундах
+
+        Returns:
+            tuple: (str, bool) - (текст адреса/кнопки, True если это адрес, False если кнопка)
+        """
+        try:
+            # Сначала ищем адрес кошелька по CSS селектору
+            wallet_address = SeleniumUtilities.find_text_by_selector(
+                self.driver,
+                selector,
+                timeout
+            )
+
+            if wallet_address:
+                logger.debug(f"Найден адрес кошелька: {wallet_address}")
+                return wallet_address, True
+
+            # Если адрес не найден, ищем кнопку подключения
+            connect_button = SeleniumUtilities.find_button_by_text(self.driver, "Connect wallet", timeout)
+            if connect_button:
+                logger.debug("Найдена кнопка 'Connect wallet' и нажимаем на нее")
+                connect_button.click()
+                logger.debug("'Connect wallet' pressed")
+                return "Wallet is connecting...", False
+
+            logger.warning("Не найдена информация о кошельке")
+            return None, None
+
+        except Exception as e:
+            logger.error(f"Ошибка при поиске информации о кошельке: {str(e)}")
+            return None, None
+
+    def get_info_wallet_or_connect_wallet(self, selector):
+        """
+        Получает информацию о кошельке или подключает его.
+
+        Args:
+            selector: str - CSS селектор для поиска адреса кошелька
+        """
+        # Получаем информацию о кошельке
+        wallet_info, is_address = self.find_wallet_info(selector)  # wallet_address, True
+        logger.debug(f'1st wallet_info: {wallet_info}, is_address: { is_address}')
+        if wallet_info:
+            if is_address:
+                # Обработка случая, когда кошелек подключен
+                logger.info(f"Адрес кошелька: {wallet_info}")
+                return wallet_info
+            else:
+                if wallet_info == "Wallet is connecting...":
+                    # Получаем информацию о кошельке
+                    return False
+                else:
+                    logger.error("Не удалось нажать кнопку 'Connect wallet'")
+                    return False
+        else:
+            logger.warning("Не удалось найти информацию о кошельке")
+            return None

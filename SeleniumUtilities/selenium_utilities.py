@@ -1,5 +1,6 @@
 import time
 import random
+from pprint import pprint
 
 from selenium.webdriver import Keys
 from selenium.webdriver.support import expected_conditions as EC
@@ -99,7 +100,6 @@ class SeleniumUtilities:
             logger.error(f"Error finding elements '{selector}': {e}")
             return []
 
-
     @staticmethod
     def click_safely(element, retry_count=3, base_delay=1, jitter_range=(0.8, 1.2), exp_factor=2):
         """
@@ -122,7 +122,8 @@ class SeleniumUtilities:
         for attempt in range(retry_count):
             try:
                 element.click()
-                logger.debug(f" (SeleniumUtilities.click_safely), Element clicked successfully on attempt {attempt + 1}")
+                logger.debug(
+                    f" (SeleniumUtilities.click_safely), Element clicked successfully on attempt {attempt + 1}")
                 return True
             except ElementClickInterceptedException:
                 if attempt < retry_count - 1:
@@ -172,7 +173,7 @@ class SeleniumUtilities:
                 return f"//{element.tag_name}[contains(@class, '{classes.split()[0]}')]"
             return f"//{element.tag_name}"
 
-        result = {"elements_info": []} # Все элементы с их описанием и локатором
+        result = {"elements_info": []}  # Все элементы с их описанием и локатором
 
         if not main_block:
             logger.error("main_block is None, cannot parse elements")
@@ -185,7 +186,6 @@ class SeleniumUtilities:
             return result
 
         for element in all_elements:
-
             element_info = {
                 "tag_name": element.tag_name,
                 "element": element,
@@ -201,40 +201,73 @@ class SeleniumUtilities:
         return result
 
     @staticmethod
-    def find_click_button(main_block, text_btn):
-        """Ищет и безопасно кликает по кнопке, выполняя повторный клик при необходимости."""
-        parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+    def find_button_recursively(element, text_btn, max_depth=10, current_depth=0):
+        """
+        Рекурсивно ищет кнопку с точным текстом во вложенных элементах.
 
-        for el in parsed_data['elements_info']:
-            try:
-                if el['is_button'] and el['text'] and isinstance(el['text'], str) and text_btn in el['text'].strip():
-                    if el['element'] and el['element'].is_displayed() and el['element'].is_enabled():
-                        logger.debug(f"Попытка клика по кнопке с текстом: {el['text']}, XPath: {el['xpath']}")
+        Args:
+            element: WebElement - элемент для поиска
+            text_btn: str - текст кнопки для поиска
+            max_depth: int - максимальная глубина вложенности
+            current_depth: int - текущая глубина вложенности
 
-                        if SeleniumUtilities.click_safely(el['element']):
-                            logger.debug("Клик по кнопке успешен")
-                            time.sleep(2)  # Подождем перед повторным кликом
+        Returns:
+            tuple: (WebElement, int) - найденный элемент и глубина, на которой он был найден, или (None, -1)
+        """
+        if current_depth >= max_depth:
+            logger.debug(f"Достигнута максимальная глубина поиска ({max_depth})")
+            return None, -1
 
-                            # 🔄 Проверяем, существует ли элемент после клика
-                            try:
-                                el['element'] = main_block.find_element(By.XPATH, el['xpath'])
-                                if el['element'].is_displayed() and el['element'].is_enabled():
-                                    if SeleniumUtilities.click_safely(el['element']):
-                                        logger.debug("Повторный клик успешно выполнен")
-                                        return True
-                                    else:
-                                        logger.debug("Повторный клик не удался")
-                                        return True
-                            except NoSuchElementException:
-                                logger.warning("Элемент исчез из DOM после первого клика, повторный клик невозможен")
-                                return True
-                        else:
-                            raise Exception("Failed to interact with button")
+        try:
+            # Ищем все кнопки с точным текстом в текущем элементе
+            buttons = element.find_elements(By.XPATH, f".//button[normalize-space(text())='{text_btn}']")
+            if buttons:
+                for button in buttons:
+                    if button.is_displayed() and button.is_enabled():
+                        logger.debug(f"Найдена кнопка '{text_btn}' на глубине {current_depth}")
+                        return button, current_depth
 
-                    else:
-                        raise Exception("Элемент отсутствует или неактивен")
-            except Exception as e:
-                logger.exception(f"Ошибка при взаимодействии с кнопкой {text_btn}: {str(e)}")
+            # Если кнопка не найдена, ищем во всех дочерних элементах
+            children = element.find_elements(By.XPATH, "./*")
+            logger.debug(f"Найдено {len(children)} дочерних элементов на глубине {current_depth}")
+
+            for child in children:
+                result, depth = SeleniumUtilities.find_button_recursively(
+                    child, text_btn, max_depth, current_depth + 1
+                )
+                if result:
+                    return result, depth
+
+        except Exception as e:
+            logger.debug(f"Ошибка при поиске на глубине {current_depth}: {str(e)}")
+
+        return None, -1
+
+    @staticmethod
+    def find_click_button(main_block, text_btn, check_visibility=True):
+        """Ищет и безопасно кликает по кнопке, выполняя поиск во вложенных элементах."""
+        try:
+            logger.info(f"Начинаем поиск кнопки с текстом: '{text_btn}'")
+            parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
+
+            for element_info in parsed_data['elements_info']:
+                if element_info['is_button'] and element_info['text'][:5] == text_btn:
+                    button = element_info['element']
+
+                    # Проверка видимости
+                    if check_visibility and not button.is_displayed():
+                        continue
+
+                    if SeleniumUtilities.click_safely(button):
+                        logger.debug(f"Успешный клик по кнопке '{text_btn}'")
+                        return True
+
+            logger.warning(f"Не найдена кнопка с текстом: '{text_btn}'")
+            return False
+
+        except Exception as e:
+            logger.exception(f"Ошибка в find_click_button: {str(e)}")
+            return False
 
     @staticmethod
     def find_input_field_click_paste(main_block, aria_label, text_input):
@@ -260,28 +293,11 @@ class SeleniumUtilities:
 
         return False
 
-    # @staticmethod
-    # def find_text(main_block, text_input) -> Dict[str, str]:
-    #     """Парсит элементы и ищет текст, содержащий заданные слова или фразы."""
-    #     parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
-    #
-    #     for el in parsed_data['elements_info']:
-    #         try:
-    #             if el['text'] and isinstance(el['text'], str):
-    #                 normalized_text = el['text'].strip().lower()
-    #                 if any(word.lower() in normalized_text for word in text_input):
-    #                     logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
-    #                     return {"message": el["text"]}  # Возвращаем найденное значение полностью
-    #         except Exception as e:
-    #             logger.exception(f"Ошибка при поиске текста '{text_input}': {str(e)}")
-    #
-    #     return {"message": "Текст не найден"}
-
     @staticmethod
     def find_text(main_block, text_input, check_visibility=True) -> Dict[str, Any]:
         """Поиск текста с проверкой видимости элементов"""
         parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
-        logger.debug(f"Ищем текст: {text_input}")
+        # logger.debug(f"Ищем текст: {text_input}")
 
         found_elements = []
         for el in parsed_data['elements_info']:
@@ -292,21 +308,19 @@ class SeleniumUtilities:
 
                     # Проверка видимости
                     if check_visibility and not element.is_displayed():
-                        logger.warning("Элемент не виден")
                         continue
 
                     # Поиск совпадений
                     if any(word.lower() in text for word in text_input):
                         found_elements.append(element)
-                        logger.debug(f"Найден текст '{el['text']}' по условию '{text_input}'")
+                        # Логируем только первое найденное совпадение
+                        if len(found_elements) == 1:
+                            logger.info(f"Найден текст '{el['text']}' по условию'")
+                        break  # Прерываем поиск после первого совпадения
             except Exception as e:
                 logger.error(f"Ошибка: {str(e)}")
 
-        return {
-            "found": bool(found_elements),
-            "elements": found_elements,
-            "message": "Найдено совпадений: {}".format(len(found_elements)) if found_elements else "Текст не найден"
-        }
+        return {"elements": found_elements}
 
     @staticmethod
     def handle_element_obstruction(driver, element):
@@ -374,23 +388,41 @@ class SeleniumUtilities:
             bool - True, если элемент был найден и по нему кликнули, иначе False
         """
         try:
-            parsed_data = SeleniumUtilities.parse_interactive_elements(parent_element)
+            # Ищем все дочерние элементы внутри родительского элемента
+            child_elements = parent_element.find_elements(By.XPATH, ".//*")
 
-            for el in parsed_data['elements_info']:
+            for child in child_elements:
                 try:
-                    if el['text'] and isinstance(el['text'], str):
-                        element_text = el['text'].strip()
-                        text_match = (child_text.lower() in element_text.lower()) if partial_match \
-                            else (child_text.lower() == element_text.lower())
+                    if child.text and isinstance(child.text, str):
+                        element_text = child.text.strip()
 
-                        if text_match and el['element'].is_displayed() and el['element'].is_enabled():
-                            logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
+                        # Проверяем точное совпадение с MetaMask
+                        if child_text.lower() == "metamask" and element_text.lower() == "metamask":
+                            if child.is_displayed() and child.is_enabled():
+                                logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
 
-                            if SeleniumUtilities.click_safely(el['element']):
-                                logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
-                                return True
-                            else:
-                                logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                                if SeleniumUtilities.click_safely(child):
+                                    logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
+                                    return True
+                                else:
+                                    logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                            break
+
+                        # Для других случаев используем обычную логику
+                        elif child_text.lower() != "metamask":
+                            text_match = (child_text.lower() in element_text.lower()) if partial_match \
+                                else (child_text.lower() == element_text.lower())
+
+                            if text_match and child.is_displayed() and child.is_enabled():
+                                logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
+
+                                if SeleniumUtilities.click_safely(child):
+                                    logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
+                                    return True
+                                else:
+                                    logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                                break
+
                 except Exception as e:
                     logger.exception(f"Ошибка при обработке элемента: {str(e)}")
                     continue
@@ -401,3 +433,38 @@ class SeleniumUtilities:
         except Exception as e:
             logger.exception(f"Ошибка в find_and_click_child_by_text: {str(e)}")
             return False
+
+    @staticmethod
+    def find_text_by_selector(driver, selector, timeout=5):
+        """
+        Находит текст в элементе по CSS селектору.
+
+        Args:
+            driver: WebDriver - экземпляр драйвера
+            selector: str - CSS селектор элемента
+            timeout: int - максимальное время ожидания элемента в секундах
+
+        Returns:
+            str: текст элемента или None, если элемент не найден
+        """
+        try:
+            # Ждем появления элемента
+            element = WebDriverWait(driver, timeout).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+            )
+
+            if element:
+                text = element.text.strip()
+                logger.debug(f"Найден текст в элементе: {text}")
+                return text
+            else:
+                logger.warning(f"Элемент с селектором {selector} не найден")
+                return None
+
+        except TimeoutException:
+            logger.error(f"Таймаут при ожидании элемента с селектором {selector}")
+            return None
+        except Exception as e:
+            logger.error(f"Ошибка при поиске текста: {str(e)}")
+            return None
+

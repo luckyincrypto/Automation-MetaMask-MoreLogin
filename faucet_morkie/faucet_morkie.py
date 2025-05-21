@@ -114,11 +114,9 @@ class MonadFaucet:
         try:
             # 📌 Используем `find_text()` вместо `find_element_safely()`
             text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
-
-            message_text = text_result['message']
-            print(f"Message text: {message_text}")  # Для отладки
+            message_text = text_result['elements'][0].text
+            logger.info(f"Message text: {message_text}")  # Для отладки
             result = {'message': message_text, 'status': 'unknown'}
-            print(f"Result: {result}")  # Для отладки
 
             # 📌 Проверяем статус по шаблонам
             for status, patterns in STATUS_PATTERNS.items():
@@ -174,10 +172,11 @@ class MonadFaucet:
                 SeleniumUtilities.find_click_button(main_block, text_btn)
 
                 time.sleep(3)  # Wait for transaction processing
-                if SeleniumUtilities.handle_element_obstruction(driver, main_block):
-                    logger.debug("Мешающие окна закрыты, проверяем результат...")
+                # if SeleniumUtilities.handle_element_obstruction(driver, main_block):
+                #     logger.debug("Мешающие окна закрыты, проверяем результат...")
 
                 result = MonadFaucet.get_faucet_status(driver, main_block)
+                time.sleep(5)
 
                 # Ensure all required fields are present
                 result.update({

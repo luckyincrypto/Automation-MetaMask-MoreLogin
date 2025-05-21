@@ -41,4 +41,4 @@ ACTIVITY_SETTINGS:
     HOURS: 24
     MINUTES: 3
   # Максимальное количество хранимых записей для каждого профиля в БД: crypto_activities
-  MAX_RECORDS_PER_PROFILE: 35
+  MAX_RECORDS_PER_PROFILE: 5
