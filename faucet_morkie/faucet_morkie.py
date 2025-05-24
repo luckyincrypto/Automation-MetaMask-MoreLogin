@@ -6,6 +6,8 @@ from pprint import pprint
 from typing import Dict, Any, Optional
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.wait import WebDriverWait
+
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
 from config import logger
 from meta_mask import MetaMaskHelper
@@ -111,22 +113,41 @@ class MonadFaucet:
             ]
         }
 
+        # Дожидаемся, что внутри main_block есть хотя бы один элемент
+        wait = WebDriverWait(driver, timeout=10)
+
+        # Ожидаем появления элементов внутри main_block
+        wait.until(
+            lambda d: main_block.find_elements(By.XPATH, ".//*"),
+            message="Элементы внутри main_block не загрузились"
+        )
+
         try:
-            # 📌 Используем `find_text()` вместо `find_element_safely()`
-            text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
-            message_text = text_result['elements'][0].text
-            logger.info(f"Message text: {message_text}")  # Для отладки
-            result = {'message': message_text, 'status': 'unknown'}
+            message_text = []
+
+            # выбираем элемент если удачный клейм
+            xpath_selector = "//div[contains(@class, 'bg-green-900/40') and contains(., 'Success! Check your wallet') and .//span[text()='Transaction:']]"
+            el = SeleniumUtilities.find_element_safely(driver, By.XPATH, xpath_selector)
+            if el:
+                print(f'el.text: {el.text}')
+                message_text.append(el.text)
+                # logger.info(f"Message text el.text: {message_text[0]}")  # Для отладки
+            else:  # если не удачный клейм, используем обычный метод
+                text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
+                message_text.append(text_result['elements'][0].text)
+                # logger.info(f"Message text ['elements'][0].text: {message_text[0]}")  # Для отладки
+            # logger.info(f"Message text: {message_text}")  # Для отладки
+            result = {'message': message_text[0], 'status': 'unknown'}
 
             # 📌 Проверяем статус по шаблонам
             for status, patterns in STATUS_PATTERNS.items():
-                if any(re.search(pattern, message_text, re.IGNORECASE) for pattern in patterns):
+                if any(re.search(pattern, message_text[0], re.IGNORECASE) for pattern in patterns):
                     result['status'] = status
                     break
 
             # ⏳ Если статус 'limit_exceeded', извлекаем время ожидания
             if result['status'] == 'limit_exceeded':
-                if (wait_match := re.search(r'in (\d+h \d+m|\d+h|\d+m)', message_text)):
+                if (wait_match := re.search(r'in (\d+h \d+m|\d+h|\d+m)', message_text[0])):
                     if (wait_delta := MonadFaucet.parse_wait_time(wait_match.group(1))):
                         result["next_attempt"] = (datetime.now() + wait_delta).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -162,21 +183,28 @@ class MonadFaucet:
                     timeout=5
                 )
 
+                logger.debug('Шаг 1: Нажимаем кнопку Claim')
                 text_btn = 'Claim'
-                SeleniumUtilities.find_click_button(main_block, text_btn)
+                if not SeleniumUtilities.find_click_button(main_block, text_btn):
+                    logger.debug(f' (process_claim), Не удачное нажатие на кнопку: {text_btn}')
 
-                aria_label = 'Ethereum address input'
-                SeleniumUtilities.find_input_field_click_paste(main_block, aria_label, wallet_address)
+                logger.debug('Шаг 2: Вводим адрес в поле для ввода')
+                locator = (By.XPATH, "//input[@type='text' and starts-with(@placeholder, 'Enter your EVM Address')]")
+                if not SeleniumUtilities.fill_field(driver, locator, wallet_address):
+                    logger.debug(f' (process_claim), Не удачный ввод в поле для адреса')
 
+                logger.debug('Шаг 3: Нажимаем кнопку Claim')
                 text_btn = 'Claim'
-                SeleniumUtilities.find_click_button(main_block, text_btn)
+                if not SeleniumUtilities.find_click_button(main_block, text_btn):
+                    logger.debug(f' (process_claim), Не удачное нажатие на кнопку: {text_btn}')
 
-                time.sleep(3)  # Wait for transaction processing
+                time.sleep(5)  # Wait for transaction processing
                 # if SeleniumUtilities.handle_element_obstruction(driver, main_block):
                 #     logger.debug("Мешающие окна закрыты, проверяем результат...")
 
+
                 result = MonadFaucet.get_faucet_status(driver, main_block)
-                time.sleep(5)
+                # time.sleep(5)
 
                 # Ensure all required fields are present
                 result.update({

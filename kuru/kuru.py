@@ -6,81 +6,87 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from  meta_mask import MetaMaskHelper
+from  meta_mask import MetaMaskHelper, compare_addresses
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
 from config import logger
 
 
 
 
-def kuru(driver: Any):
+def kuru(driver, mm_address):
     URL = 'https://www.kuru.io/swap?from=0x0000000000000000000000000000000000000000&to=0xf817257fed379853cDe0fa4F97AB987181B1E5Ea'
     logger.info('Opening Kuru website')
     driver.get(URL)
     logger.info('Opened')
     time.sleep(2)
 
-    # Определяем селектор для поиска адреса кошелька
-    # selector = "button[data-sentry-element="DialogTrigger"]"  # Connect wallet
-    selector = 'div[data-sentry-element="SheetTrigger"]'  # Wallet connected
+    # поиск подходящего селектора для подключенного адреса кошелька или если нужно подключить
+    css_selectors = [
+        'button[data-sentry-element="DialogTrigger"]',  # Connect wallet button
+        'div[data-sentry-element="SheetTrigger"]',  # Wallet connected already
+        ]
+    def connection_wallet_to_site():
+        while True:
+            time.sleep(3)
+            element =  SeleniumUtilities.find_which_selector(driver, By.CSS_SELECTOR, css_selectors, timeout=5)
+            text_in_element = element.text
+            logger.debug(f'text_in_element: {text_in_element}')
+            if text_in_element == 'Connect wallet':
+                element.click()
+                logger.debug(f'Нажали на кнопку <Connect wallet>')
 
-    # Создаем экземпляр MetaMaskHelper
-    metamask = MetaMaskHelper(driver)
+                time.sleep(3)
+                role_name = 'dialog'
+                selector = f"//div[@role='{role_name}']"
+                dialog_block = SeleniumUtilities.find_element_safely(driver, By.XPATH, selector, timeout=5)
+                if dialog_block:
+                    # Перед взаимодействием с MetaMask получаем текущие открытые окна
+                    current_windows = driver.window_handles
+                    logger.debug(f'current_windows: {current_windows}')
 
-    # Получаем информацию о кошельке или подключаем его
-    result = metamask.get_info_wallet_or_connect_wallet(selector)
+                    child_text = 'MetaMask'
+                    logger.debug('Click on child: %s', child_text)
+                    if SeleniumUtilities.find_and_click_child_by_text(dialog_block, child_text):
+                        logger.info('Clicked on child: %s', child_text)
 
-    if result:
-        logger.info(f"Кошелек подключен, адрес: {result}")
+                        new_window = SeleniumUtilities.switch_to_new_window(driver, current_windows)
+                        if new_window:
+                            logger.debug(f'new_window: {new_window}')
 
-    else:
-        logger.info("Не удалось получить информацию о кошельке, подключение в процессе.")
+                            rect = driver.get_window_rect()
+                            logger.debug(f"Позиция: ({rect['x']}, {rect['y']}), Размер: {rect['width']}x{rect['height']}")
 
-    # class_name = 'space-y-4'
-    # celector = f"//div[contains(@class, {class_name})]"
-    # main_block = SeleniumUtilities.find_element_safely(
-    #     driver,
-    #     By.XPATH,
-    #     celector,
-    #     timeout=5
-    # )
+                            driver.maximize_window()
+                            time.sleep(2)
+                            logger.debug(f'Активное окно приложения MetaMask')
+                            # Установить окно: x=100, y=200 (позиция), width=800, height=600 (размер)
+                            driver.set_window_rect(rect['x'], rect['y'], rect['width'], rect['height'])
 
-            # Парсим элементы внутри main_block
-    # info = SeleniumUtilities.parse_interactive_elements(main_block)
-    # pprint(info)
 
-            # Клик по "Connect wallet"
-    # text_btn = 'Connect wallet'
-    # logger.info('Click on button: %s', text_btn)
-    # if SeleniumUtilities.find_click_button(main_block, text_btn):
-    #     logger.info('Clicked on button: %s', text_btn)
+                            helper = MetaMaskHelper(driver)
+                            connection_button = helper.handle_metamask_connection(driver)
+                            if connection_button:
+                                logger.info("Подключение выполнено")
+                                window = current_windows[-1]
+                                driver.switch_to.window(window)
+                            else:
+                                logger.error("Не удалось завершить подключение")
 
-        time.sleep(3)
-        role_name = 'dialog'
-        celector = f"//div[@role='{role_name}']"
-        dialog_block = SeleniumUtilities.find_element_safely(
-            driver,
-            By.XPATH,
-            celector,
-            timeout=5
-        )
-
-        # Парсим элементы внутри dialog_block
-        # info_dialog_block = SeleniumUtilities.parse_interactive_elements(dialog_block)
-        # pprint(info_dialog_block)
-
-            # Получаем текущие открытые окна
-        current_windows = driver.window_handles
-
-        child_text = 'MetaMask'
-        logger.info('Click on child: %s', child_text)
-        if SeleniumUtilities.find_and_click_child_by_text(dialog_block, child_text):
-            logger.info('Clicked on child: %s', child_text)
-
-            SeleniumUtilities.switch_to_new_window(driver, current_windows)
-            driver.maximize_window()
-            helper = MetaMaskHelper(driver)
-            if helper.handle_metamask_connection(driver):
-                logger.info("Подключение выполнено")
             else:
-                logger.error("Не удалось завершить подключение")
+                if compare_addresses(mm_address, text_in_element):
+                    logger.info(f'Адрес MetaMask {mm_address} подключен к сайту: https://www.kuru.io/ \n')
+                    break
+        return True
+
+    print(f'connection_wallet_to_site(): {connection_wallet_to_site()}')
+
+
+
+
+
+
+
+
+
+
+

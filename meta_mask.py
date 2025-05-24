@@ -6,6 +6,7 @@ from pprint import pprint
 
 # Сторонние библиотеки
 import pyperclip
+from selenium.common import WebDriverException
 from selenium.webdriver import ActionChains, Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,10 +17,38 @@ from config import logger
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
 
 
+def compare_addresses(full_address: str, short_address: str, prefix_length: int = 4,
+                      suffix_length: int = 4) -> bool:
+    """
+    Сравнивает полный адрес с сокращенным форматом 0x...
+
+    :param full_address: Полный адрес (например, "0x0F8009b1dE7fF721A66Eb36c64eA11b2b8847801")
+    :param short_address: Сокращенный адрес (например, "0x0F80...7801")
+    :param prefix_length: Сколько символов после "0x" брать из начала
+    :param suffix_length: Сколько символов брать из конца
+    :return: True, если адреса совпадают по шаблону
+    """
+    # Проверяем базовый формат
+    if not full_address.startswith("0x") or not short_address.startswith("0x"):
+        return False
+
+    # Извлекаем части из полного адреса
+    clean_full = full_address[2:]  # Убираем "0x"
+    prefix = clean_full[:prefix_length]
+    suffix = clean_full[-suffix_length:]
+
+    # Формируем ожидаемый сокращенный адрес
+    expected_short = f"0x{prefix}...{suffix}".lower()  # Приводим к нижнему регистру для унификации
+
+    # Приводим оба адреса к одному регистру и сравниваем
+    return expected_short == short_address.lower()
+
+
 class MetaMaskHelper(SeleniumUtilities):
     def __init__(self, driver):
         self.driver = driver
         self.base_url = "chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#"
+        self.network_manager = self.NetworkManager(self.driver)
 
     def check_page_url(self, expected_url=None):
         """Проверяет текущий URL страницы."""
@@ -383,6 +412,7 @@ class MetaMaskHelper(SeleniumUtilities):
                 got_it_btn.click()
                 logger.debug("(pop_up_window_close) Всплывающее окно закрыто")
                 return True
+            return None
 
         except Exception:
             logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
@@ -436,20 +466,10 @@ class MetaMaskHelper(SeleniumUtilities):
 
             # 2. Ждем загрузки страницы
             time.sleep(3)
-
-            # 3. Получаем корневой элемент окна MetaMask
-            mm_root_element = self.find_element_safely(
-                driver,
-                By.XPATH,
-                "//body",
-                timeout=10
-            )
-
-            if not mm_root_element:
-                logger.error("Не удалось найти корневой элемент MetaMask")
-                return False
-            text_btn = 'Conne' # Текст кнопки подключения? 5 символов, настойка в SeleniumUtilities.find_click_button
-            if SeleniumUtilities.find_click_button(mm_root_element, text_btn):
+            text_btn = 'Connect' # Текст кнопки подключения
+            button_element = SeleniumUtilities.find_button_by_text(driver, text_btn)
+            if button_element:
+                button_element.click()
                 return True
             else:
                 return False
@@ -458,66 +478,227 @@ class MetaMaskHelper(SeleniumUtilities):
             logger.error(f"Ошибка подключения MetaMask: {str(e)}")
             return False
 
-    def find_wallet_info(self, selector, timeout=10):
-        """
-        Находит информацию о кошельке или кнопку подключения.
 
-        Args:
-            selector: str - CSS селектор для поиска адреса кошелька
-            timeout: int - максимальное время ожидания элемента в секундах
+    class NetworkManager:
+        """Класс для управления сетями с оригинальными селекторами"""
+        # NETWORK_DISPLAY = (By.XPATH, '//*[@data-testid="network-display"]')
+        NETWORK_DISPLAY = (By.XPATH, "//*[@id='app-content']/div/div[contains(@class, 'mm-box') and contains(@class, 'multichain-app-header')]/div/div[1]/button/p")
+        ADD_CUSTOM_NETWORK_BTN = (By.XPATH, "//button[contains(., 'Add a custom network')]")
+        RPC_DROPDOWN = (By.XPATH, '//*[@data-testid="test-add-rpc-drop-down"]')
+        EXPLORER_DROPDOWN = (By.XPATH, '//*[@data-testid="test-explorer-drop-down"]')
+        CLOSE_BUTTON = (By.XPATH, '//button[@aria-label="Close"]')
 
-        Returns:
-            tuple: (str, bool) - (текст адреса/кнопки, True если это адрес, False если кнопка)
-        """
-        try:
-            # Сначала ищем адрес кошелька по CSS селектору
-            wallet_address = SeleniumUtilities.find_text_by_selector(
-                self.driver,
-                selector,
-                timeout
-            )
+        MAIN_FORM_FIELDS = {
+            'network_name': (By.ID, "networkName"),  #
+            'chain_id': (By.ID, "chainId"),  #
+            'currency_symbol': (By.ID, "nativeCurrency"),  #
+        }
 
-            if wallet_address:
-                logger.debug(f"Найден адрес кошелька: {wallet_address}")
-                return wallet_address, True
+        def __init__(self, driver):
+            self.driver = driver
 
-            # Если адрес не найден, ищем кнопку подключения
-            connect_button = SeleniumUtilities.find_button_by_text(self.driver, "Connect wallet", timeout)
-            if connect_button:
-                logger.debug("Найдена кнопка 'Connect wallet' и нажимаем на нее")
-                connect_button.click()
-                logger.debug("'Connect wallet' pressed")
-                return "Wallet is connecting...", False
-
-            logger.warning("Не найдена информация о кошельке")
-            return None, None
-
-        except Exception as e:
-            logger.error(f"Ошибка при поиске информации о кошельке: {str(e)}")
-            return None, None
-
-    def get_info_wallet_or_connect_wallet(self, selector):
-        """
-        Получает информацию о кошельке или подключает его.
-
-        Args:
-            selector: str - CSS селектор для поиска адреса кошелька
-        """
-        # Получаем информацию о кошельке
-        wallet_info, is_address = self.find_wallet_info(selector)  # wallet_address, True
-        logger.debug(f'1st wallet_info: {wallet_info}, is_address: { is_address}')
-        if wallet_info:
-            if is_address:
-                # Обработка случая, когда кошелек подключен
-                logger.info(f"Адрес кошелька: {wallet_info}")
-                return wallet_info
-            else:
-                if wallet_info == "Wallet is connecting...":
-                    # Получаем информацию о кошельке
+        def add_custom_network(self):
+            """Добавление кастомной сети по оригинальному алгоритму"""
+            try:
+                logger.info('Шаг 3.1: Нажимаем Add a custom network')
+                if not self._click_element(self.ADD_CUSTOM_NETWORK_BTN):
+                    logger.debug(f' (add_custom_network), Не удачное нажатие на Add a custom network')
                     return False
-                else:
-                    logger.error("Не удалось нажать кнопку 'Connect wallet'")
+
+                # Шаг 3: Заполняем основные поля
+                logger.info('Шаг 3.2: Заполняем основные поля')
+                for field, locator in self.MAIN_FORM_FIELDS.items():
+                    if not self._fill_field(locator, network_config.get(field, "")):
+                        logger.debug(f' (add_custom_network), Не удачное заполнение основных полей')
+                        return False
+
+                # Шаг 3.3: Обработка RPC URL
+                logger.info('Шаг 3.3: Обработка RPC URL')
+                if not self._process_rpc_section():
+                    logger.debug(f' (add_custom_network), Не удачное обработка RPC URL')
                     return False
-        else:
-            logger.warning("Не удалось найти информацию о кошельке")
-            return None
+
+                # Шаг 3.4: Обработка Block Explorer
+                logger.info('Шаг 3.4: Обработка Block Explorer')
+                if not self._process_explorer_section():
+                    logger.debug(f' (add_custom_network), Не удачное обработка Block Explorer')
+                    return False
+
+                # Шаг 6: Сохраняем
+                logger.info('Шаг 3.5: Сохраняем сеть')
+                if self._click_button_by_text("Save"):
+                    logger.info('Сеть сохранена успешно ')
+                return True
+
+            except Exception as e:
+                logger.error(f"Ошибка при добавлении сети: {str(e)}")
+                return False
+
+        def _process_rpc_section(self):
+            """Обработка секции RPC"""
+            if not self._click_element(self.RPC_DROPDOWN):
+                return False
+            logger.debug(f" (_process_rpc_section), Клик по кнопке <RPC_DROPDOWN> успешен")
+
+            if not self._click_button_by_text("Add RPC URL"):
+                return False
+            logger.debug(f" (_process_rpc_section), Клик по кнопке <Add RPC URL> успешен")
+
+            # Шаг 3.3.1: Заполняем поле RPC URL
+            logger.info('Шаг 3.3.1: Заполняем поле "RPC URL"')
+            if not self._fill_field((By.ID, "rpcUrl"), network_config.get('default_rpc_url')):
+                logger.debug(f' (_process_rpc_section), Не удачное заполнение поля "RPC URL"')
+                return False
+
+            logger.debug(f" (_process_rpc_section), Клик по кнопке <Add URL>")
+            if self._click_button_by_text("Add URL"):
+                logger.debug(f" (_process_rpc_section), Клик по кнопке <Add URL> успешен")
+            return True
+
+        def _process_explorer_section(self):
+            """Обработка секции Block Explorer"""
+            if not self._click_element(self.EXPLORER_DROPDOWN):
+                return False
+            logger.debug(f" (_process_explorer_section), Клик по кнопке <EXPLORER_DROPDOWN> успешен")
+
+            if not self._click_button_by_text("Add a block explorer URL"):
+                return False
+            logger.debug(f" (_process_explorer_section), Клик по кнопке <Add a block explorer URL> успешен")
+
+            # Шаг 3.4.1: Заполняем поле RPC URL
+            logger.info('Шаг 3.4.1: Заполняем поле "Add a block explorer URL"')
+            block_explorer = (By.ID, "additional-rpc-url")  # locator
+            if not self._fill_field(block_explorer, network_config.get('block_explorer_url')):
+                logger.debug(f' (_process_explorer_section), Не удачное заполнение поля "Add a block explorer URL"')
+                return False
+
+            logger.debug(f" (_process_explorer_section), Клик по кнопке <Add URL>")
+            if self._click_button_by_text("Add URL"):
+                logger.debug(f" (_process_explorer_section), Клик по кнопке <Add URL> успешен")
+            return True
+
+
+        def _click_element(self, locator, timeout=10):
+            element = SeleniumUtilities.find_element_safely(self.driver, *locator, timeout)
+            if element and SeleniumUtilities.click_safely(element):
+                logger.debug(f' (_click_element), Клик по кнопке успешен')
+                return True
+            return False
+
+        def _click_button_by_text(self, text):
+            element = SeleniumUtilities.find_button_by_text(self.driver, text)
+            if element and SeleniumUtilities.click_safely(element):
+                logger.info(f" (_click_button_by_text), Клик по кнопке: <{text}> успешен")
+                return True
+            return False
+
+        def _fill_field(self, locator, value):
+            element = SeleniumUtilities.find_element_safely(self.driver, *locator)
+            if element:
+                element.clear()
+                element.send_keys(value)
+                if element.get_attribute("value") == value:
+                    logger.debug(f" (_fill_field), Вставка значения: {value} успешна")
+                    return True
+            return False
+
+
+
+        def ensure_monad_testnet_active(self, target_network):
+            """
+            Основная функция проверки и установки сети
+            Возвращает:
+                bool: True - сеть активна, False - ошибка
+            """
+            try:
+                # Шаг 1: Проверка текущей активной сети
+                logger.info(f"Шаг 1: Проверка текущей активной сети")
+                if self.check_current_network(target_network):
+                    logger.info(f" (ensure_monad_testnet_active), Сеть {target_network} уже активна")
+                    return True
+
+                time.sleep(2)
+                # Шаг 2: Попытка найти сеть в списке
+                logger.info(f"Шаг 2: Попытка найти {target_network} в списке сетей")
+                xpath_selector = "//div[contains(@class, 'multichain-network-list-menu')]//div[contains(@class, 'mm-box') and contains(@class, 'characters')]"
+                main_block = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, xpath_selector)
+
+                if main_block:
+                    logger.debug(f' (ensure_monad_testnet_active), main_block получен: {main_block}')
+                    res_info = SeleniumUtilities.parse_interactive_elements(main_block)
+                    # pprint(res_info)
+                    el_res = res_info['elements_info']
+                    for el in el_res:
+                        if target_network in el['text']  and el['tag_name'] == 'p':
+                            logger.debug(f" (ensure_monad_testnet_active), Найдена сеть: {el['text']}, в элементе с tag_name: <{el['tag_name']}>")
+                            SeleniumUtilities.click_safely(el['element'])
+                            logger.info(f" (ensure_monad_testnet_active), Успешно переключились на сеть: {el['text']}")
+                            return True
+
+                time.sleep(2)
+                # Шаг 3: Если сеть не найдена - добавляем
+                logger.warning(f"Шаг 3: Сеть {target_network} не найдена, начинаем установку")
+                if not self.add_custom_network():
+                    logger.error("Ошибка добавления сети")
+                    return False
+
+                time.sleep(2)
+                # Шаг 4: Повторная проверка после добавления
+                logger.info(f"Шаг 4: Повторная проверка после добавления")
+                if self.check_current_network(target_network):
+                    logger.info(f" (ensure_monad_testnet_active), Сеть {target_network} активна")
+                    return True
+                time.sleep(2)
+
+                # Шаг 5: Повторная попытка найти сеть в списке
+                logger.info(f"Шаг 5: Повторная попытка найти {target_network} в списке сетей")
+                network_selector = (
+                    By.XPATH,
+                    f'//div[@data-testid="{target_network}"]/ancestor::div[contains(@class, "multichain-network-list-item")]'
+                )
+                if self._click_element(network_selector, timeout=5):
+                    logger.info(f" (ensure_monad_testnet_active), Успешно переключились на {target_network}")
+                    return True
+
+
+                logger.error("Не удалось активировать сеть после добавления")
+                return False
+
+            except Exception as e:
+                logger.error(f"Критическая ошибка: {str(e)}")
+                return False
+
+        def check_current_network(self, expected_network):
+            """Проверка текущей сети с улучшенной валидацией"""
+            try:
+                element = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located(self.NETWORK_DISPLAY)
+                )
+                current_network = element.text
+                if current_network == expected_network:
+                    logger.info(f"Текущая сеть корректна: {current_network}")
+                    return True
+
+                logger.warning(f"Обнаружена другая сеть: {current_network}, требуемая сеть: {expected_network}")
+                SeleniumUtilities.click_safely(element)
+                return False
+
+            except Exception as e:
+                logger.error(f"Ошибка проверки сети: {str(e)}")
+                return False
+
+
+network_config = {
+    'network_name': 'Monad Testnet',
+    'default_rpc_url': 'https://testnet-rpc.monad.xyz',
+    'chain_id': '10143',
+    'currency_symbol': 'MON',
+    'block_explorer_url': 'https://testnet.monadexplorer.com'
+}
+
+
+def check_setup_active_network(mm, target_network):
+    if mm.network_manager.ensure_monad_testnet_active(target_network):
+        logger.info("Monad Testnet успешно активирована\n")
+    else:
+        logger.error("Не удалось активировать Monad Testnet\n")

@@ -24,7 +24,7 @@ class SeleniumUtilities:
         logger.debug(f"(open_tab) Открыта вкладка: {url}")
 
     @staticmethod
-    def switch_to_new_window(driver, current_windows, timeout=15):
+    def switch_to_new_window(driver, current_windows, timeout=10):
         """
         Ожидает появление нового окна/вкладки и переключается на него.
 
@@ -44,11 +44,14 @@ class SeleniumUtilities:
         new_windows = driver.window_handles
 
         # Находим handle нового окна
-        new_window = list(set(new_windows) - set(current_windows))[0]
-
-        # Переключаемся на новое окно
-        driver.switch_to.window(new_window)
-        return new_window
+        new_window = list(set(new_windows) - set(current_windows))[-1]
+        logger.debug(f'new_window: {new_window}')
+        if len(new_window) >= 1:
+            logger.debug(f' Переключаемся на новое окно: {new_window}')
+            # Переключаемся на новое окно
+            driver.switch_to.window(new_window)
+            return new_window
+        return None
 
     @staticmethod
     def find_element_safely(driver, by, selector, timeout=10):
@@ -76,7 +79,7 @@ class SeleniumUtilities:
             return None
 
     @staticmethod
-    def find_elements_safely(driver, by, selector, timeout=10):
+    def find_elements_safely(driver, by, selector, timeout=10) -> list:
         """
         Найти несколько элементов безопасно, без выброса исключений.
 
@@ -92,7 +95,9 @@ class SeleniumUtilities:
         try:
             wait = WebDriverWait(driver, timeout)
             elements = wait.until(EC.presence_of_all_elements_located((by, selector)))
-            return elements
+            if elements:
+                return elements
+            return []
         except TimeoutException:
             logger.debug(f"Elements '{selector}' not found after {timeout} seconds")
             return []
@@ -163,16 +168,6 @@ class SeleniumUtilities:
     def parse_interactive_elements(main_block) -> Dict[str, List[Dict]]:
         """Парсит блок, извлекая текст, кнопки и поля ввода с их метками."""
 
-        def get_xpath(element) -> str:
-            """Генерирует XPath для элемента (упрощенная версия)."""
-            classes = element.get_attribute("class")
-            element_id = element.get_attribute("id")
-            if element_id:
-                return f"//{element.tag_name}[@id='{element_id}']"
-            if classes:
-                return f"//{element.tag_name}[contains(@class, '{classes.split()[0]}')]"
-            return f"//{element.tag_name}"
-
         result = {"elements_info": []}  # Все элементы с их описанием и локатором
 
         if not main_block:
@@ -190,11 +185,12 @@ class SeleniumUtilities:
                 "tag_name": element.tag_name,
                 "element": element,
                 "text": element.text.strip() if element.text else "",
+                # "text": element.text,
                 "is_button": element.tag_name.lower() == "button",  # Является ли сам элемент кнопкой?
                 "is_input_field": element.tag_name.lower() in ["input", "textarea"],
                 "classes": element.get_attribute("class") or "",
                 "aria_label": element.get_attribute("aria-label") or "",
-                "xpath": get_xpath(element)
+                # "xpath": get_xpath(element)
             }
             result["elements_info"].append(element_info)
 
@@ -246,12 +242,13 @@ class SeleniumUtilities:
     @staticmethod
     def find_click_button(main_block, text_btn, check_visibility=True):
         """Ищет и безопасно кликает по кнопке, выполняя поиск во вложенных элементах."""
+        number_of_symbols = (len(text_btn))  # подсчет количества символов в строковой переменной
         try:
             logger.info(f"Начинаем поиск кнопки с текстом: '{text_btn}'")
             parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
 
             for element_info in parsed_data['elements_info']:
-                if element_info['is_button'] and element_info['text'][:5] == text_btn:
+                if element_info['is_button'] and element_info['text'][:number_of_symbols] == text_btn:
                     button = element_info['element']
 
                     # Проверка видимости
@@ -300,10 +297,12 @@ class SeleniumUtilities:
         # logger.debug(f"Ищем текст: {text_input}")
 
         found_elements = []
+
         for el in parsed_data['elements_info']:
             try:
                 if el['text'] and isinstance(el['text'], str):
                     text = el['text'].strip().lower()
+                    # logger.debug(f'text: {text}')
                     element = el['element']
 
                     # Проверка видимости
@@ -435,36 +434,52 @@ class SeleniumUtilities:
             return False
 
     @staticmethod
-    def find_text_by_selector(driver, selector, timeout=5):
-        """
-        Находит текст в элементе по CSS селектору.
+    def find_which_selector(driver, by, selectors, timeout):
+        for selector in selectors:
+            logger.debug(f'Проверяем селектор: {selector}')
+            selector_element = SeleniumUtilities.find_element_safely(driver, by, selector, timeout)
+            if selector_element:
+                logger.debug(f'Найден элемент, type: {selector_element.get_attribute('type')} по селектору: {selector}')
+                return selector_element
+            logger.debug(f'Элемента не найдено по данному селектору: {selector}')
+        logger.debug(f'Элементов не найдено по данным селекторам')
+        return None
 
+    @staticmethod
+    def fill_field(driver, locator, value):
+        element = SeleniumUtilities.find_element_safely(driver, *locator)
+        if element:
+            element.clear()
+            element.send_keys(value)
+            if element.get_attribute("value") == value:
+                logger.debug(f" (_fill_field), Вставка значения: {value} успешна")
+                return True
+        return False
+
+    @staticmethod
+    def get_element_attributes(driver, element) -> Dict[str, str]:
+        """
+        Получает все атрибуты указанного элемента.
         Args:
-            driver: WebDriver - экземпляр драйвера
-            selector: str - CSS селектор элемента
-            timeout: int - максимальное время ожидания элемента в секундах
-
+            driver (WebDriver): Экземпляр Selenium WebDriver.
+            element (WebElement): Целевой элемент, у которого нужно получить атрибуты.
         Returns:
-            str: текст элемента или None, если элемент не найден
+            Dict[str, str]: Словарь с названиями атрибутов и их значениями.
+        Example:
+            attributes = get_element_attributes(driver, some_element)
+            print(attributes)
         """
-        try:
-            # Ждем появления элемента
-            element = WebDriverWait(driver, timeout).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-            )
 
-            if element:
-                text = element.text.strip()
-                logger.debug(f"Найден текст в элементе: {text}")
-                return text
-            else:
-                logger.warning(f"Элемент с селектором {selector} не найден")
-                return None
+        # Выполняем JavaScript для извлечения списка названий атрибутов
+        attribute_names = driver.execute_script(
+            "return arguments[0].getAttributeNames();", element
+        )
 
-        except TimeoutException:
-            logger.error(f"Таймаут при ожидании элемента с селектором {selector}")
-            return None
-        except Exception as e:
-            logger.error(f"Ошибка при поиске текста: {str(e)}")
-            return None
+        # Получаем значения атрибутов и формируем словарь
+        attributes = {attr_name: element.get_attribute(attr_name) for attr_name in attribute_names}
 
+        return attributes
+
+        # Использование:
+        # attributes = get_element_attributes(driver, main_block)
+        # print(attributes)

@@ -20,7 +20,7 @@ from kuru.kuru import kuru
 
 # Локальные модули
 from lava_moat import modify_file_runtimelavamoat
-from meta_mask import MetaMaskHelper
+from meta_mask import MetaMaskHelper, check_setup_active_network
 from create_mm_wallet import create_wallet
 from config import (
     logger, DATA_BASE_PATH, WORKSHEET_NAME,
@@ -30,6 +30,7 @@ from MoreLogin.browser_manager import BrowserManager
 
 # Проверяем режим работы в начале выполнения
 check_auto_mode()
+
 
 def create_password():
     """Создает надежный пароль длиной 22 символа, включающий буквы, цифры и специальные символы."""
@@ -91,16 +92,16 @@ async def restart_browser_profile(driver, env_id, unique_id, env_name, count):
 
 
 async def main_flow(
-    env_id,
-    seed,
-    password,
-    env_name,
-    unique_id,
-    mm_address,
-    worksheet_mm,
-    workbook_mm,
-    row,
-    mode_close_profile_or_not="n"
+        env_id,
+        seed,
+        password,
+        env_name,
+        unique_id,
+        mm_address,
+        worksheet_mm,
+        workbook_mm,
+        row,
+        mode_close_profile_or_not="n"
 ):
     """Основной рабочий процесс для одного профиля."""
     driver = None
@@ -172,7 +173,7 @@ async def main_flow(
 
 
 async def read_user_list_file(
-    worksheet_mm, start_account, end_account, mix_profiles, workbook_mm
+        worksheet_mm, start_account, end_account, mix_profiles, workbook_mm
 ):
     """Чтение данных из Excel-файла."""
     profiles = []
@@ -256,7 +257,6 @@ async def read_user_list_file(
         raise MainError(f"Failed to read user list: {e}")
 
 
-
 def get_user_input():
     """Получение параметров от пользователя с улучшенной обработкой ввода и логированием."""
     try:
@@ -331,12 +331,14 @@ def get_user_input():
 
                         if not delay_input:
                             delay_from_to = [str(default_delay_min), str(default_delay_max)]
-                            logger.info(f"Используется значение задержки из конфига: {default_delay_min}-{default_delay_max} секунд")
+                            logger.info(
+                                f"Используется значение задержки из конфига: {default_delay_min}-{default_delay_max} секунд")
                             break
 
                         delay_from_to = delay_input.split(",")
                         if len(delay_from_to) == 2 and float(delay_from_to[0]) < float(delay_from_to[1]):
-                            print(f"Задержка установлена в диапазоне от {delay_from_to[0]} до {delay_from_to[1]} секунд.")
+                            print(
+                                f"Задержка установлена в диапазоне от {delay_from_to[0]} до {delay_from_to[1]} секунд.")
                             break
                         else:
                             logger.error("Не корректный диапазон. Повторите ввод, например: 10,60")
@@ -364,7 +366,7 @@ def get_user_input():
 
 
 async def operationEnv(
-    driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, file_path
+        driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, file_path
 ):
     """Основная операция."""
     try:
@@ -376,13 +378,12 @@ async def operationEnv(
         await asyncio.sleep(1)
 
         # Используем методы через экземпляр MetaMaskHelper
-        helper = MetaMaskHelper(driver)
-        helper.delete_others_windows()
+        mm = MetaMaskHelper(driver)
+        mm.delete_others_windows()
 
         if modify_file_runtimelavamoat(env_id):
             try:
-
-                wallet_mm_from_browser_extension = helper.meta_mask(
+                wallet_mm_from_browser_extension = mm.meta_mask(
                     seed,
                     password,
                     mm_address,
@@ -394,30 +395,38 @@ async def operationEnv(
                 logger.debug(
                     f"wallet_mm_from_browser_extension: {wallet_mm_from_browser_extension}, type: {type(wallet_mm_from_browser_extension)}"
                 )
-
-                # Проверка БД на предмет наступления времени в необходимости выполнения активности faucet_morkie
-                # и занесением результата в БД.
-                try:
-                    if wallet_mm_from_browser_extension:
-                        process_activity(driver, wallet_mm_from_browser_extension, row)
-                    else:
-                        process_activity(driver, mm_address, row)
-                except DatabaseError as e:
-                    logger.error(f"Database error in operationEnv: {e}")
-                    raise
-                except Exception as e:
-                    logger.error(f"Error processing activity: {e}")
-                    raise
-
-                # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
-                # helper.open_tab("https://faucet.morkie.xyz/monad")
-                kuru(driver)
-                # helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
-                # helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
-
             except Exception as e:
                 logger.error(f"Error in MetaMask operation: {e}")
                 raise
+
+            # Проверяем активную сеть, меняем на Monad Testnet, если ее нет то устанавливаем
+            check_setup_active_network(mm, target_network="Monad")
+
+            time.sleep(5)
+            # Проверка БД на предмет наступления времени в необходимости выполнения активности faucet_morkie
+            # и занесением результата в БД.
+            try:
+                if wallet_mm_from_browser_extension:
+                    process_activity(driver, wallet_mm_from_browser_extension, row)
+                else:
+                    process_activity(driver, mm_address, row)
+            except DatabaseError as e:
+                logger.error(f"Database error in operationEnv: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Error processing activity: {e}")
+                raise
+            # helper.open_tab("https://faucet.morkie.xyz/monad")
+
+            time.sleep(5)
+            # Активность на сайте: https://www.kuru.io/
+            kuru(driver, mm_address)
+
+            # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
+            # helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
+            # helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
+
+
 
     except Exception as e:
         logger.error(f"Error in operationEnv: {e}")
@@ -447,7 +456,7 @@ async def main():
             end_account = selected_account
             mode_close_profile_or_not = 'y'
             mix_profiles = 'n'
-            delay_from_to = [0,0]
+            delay_from_to = [0, 0]
         else:
             # Интерактивный режим. Получаем параметры от пользователя
             start_account, end_account, mix_profiles, delay_from_to, mode_close_profile_or_not = get_user_input()

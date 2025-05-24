@@ -74,7 +74,7 @@ class SQLiteDatabase:
             if conn:
                 try:
                     conn.close()
-                    logger.debug("Соединение с базой данных закрыто")
+                    logger.debug("Соединение с базой данных закрыто\n")
                 except sqlite3.Error as e:
                     logger.error(f"Ошибка при закрытии соединения с базой данных: {e}")
 
