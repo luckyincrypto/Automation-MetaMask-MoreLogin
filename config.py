@@ -1,3 +1,4 @@
+import random
 import sys
 import traceback
 import yaml
@@ -109,6 +110,9 @@ class Config:
         # Экспортируем настройки активности
         self.ACTIVITY_SETTINGS = self.activity_settings
 
+        # Настройки обработки активностей Kuru
+        self.kuru_activity_settings = config_data.get("KURU_ACTIVITY_SETTINGS", {})
+
 
 # Создаем экземпляр конфигурации
 config = Config()
@@ -142,3 +146,7 @@ MAX_INTERVAL_MINUTES = config.max_interval_minutes  # Максимальный �
 AUTO_PROCESS_UNEXPECTED_STATUS = config.auto_process_unexpected_status
 SUCCESS_WAIT_TIME = config.success_wait_time
 MAX_RECORDS_PER_PROFILE = config.max_records_per_profile
+
+# Настройки обработки активностей Kuru
+MIN_PERCENT_MON = config.kuru_activity_settings.get("MIN_PERCENT_MON")
+MAX_PERCENT_MON = config.kuru_activity_settings.get("MAX_PERCENT_MON")

@@ -603,6 +603,23 @@ class MetaMaskHelper(SeleniumUtilities):
             return False
 
 
+        def try_to_find_monad_testnet(self, target_network):
+            xpath_selector = "//div[contains(@class, 'multichain-network-list-menu')]//div[contains(@class, 'mm-box') and contains(@class, 'characters')]"
+            main_block = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, xpath_selector)
+
+            if main_block:
+                logger.debug(f' (ensure_monad_testnet_active), main_block получен: {main_block}')
+                res_info = SeleniumUtilities.parse_interactive_elements(main_block)
+                # pprint(res_info)
+                el_res = res_info['elements_info']
+                for el in el_res:
+                    if target_network in el['text'] and el['tag_name'] == 'p':
+                        logger.debug(
+                            f" (ensure_monad_testnet_active), Найдена сеть: {el['text']}, в элементе с tag_name: <{el['tag_name']}>")
+                        SeleniumUtilities.click_safely(el['element'])
+                        logger.info(f" (ensure_monad_testnet_active), Успешно переключились на сеть: {el['text']}")
+                        return True
+
 
         def ensure_monad_testnet_active(self, target_network):
             """
@@ -620,20 +637,8 @@ class MetaMaskHelper(SeleniumUtilities):
                 time.sleep(2)
                 # Шаг 2: Попытка найти сеть в списке
                 logger.info(f"Шаг 2: Попытка найти {target_network} в списке сетей")
-                xpath_selector = "//div[contains(@class, 'multichain-network-list-menu')]//div[contains(@class, 'mm-box') and contains(@class, 'characters')]"
-                main_block = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, xpath_selector)
-
-                if main_block:
-                    logger.debug(f' (ensure_monad_testnet_active), main_block получен: {main_block}')
-                    res_info = SeleniumUtilities.parse_interactive_elements(main_block)
-                    # pprint(res_info)
-                    el_res = res_info['elements_info']
-                    for el in el_res:
-                        if target_network in el['text']  and el['tag_name'] == 'p':
-                            logger.debug(f" (ensure_monad_testnet_active), Найдена сеть: {el['text']}, в элементе с tag_name: <{el['tag_name']}>")
-                            SeleniumUtilities.click_safely(el['element'])
-                            logger.info(f" (ensure_monad_testnet_active), Успешно переключились на сеть: {el['text']}")
-                            return True
+                if self.try_to_find_monad_testnet(target_network):
+                    return True
 
                 time.sleep(2)
                 # Шаг 3: Если сеть не найдена - добавляем
@@ -652,14 +657,8 @@ class MetaMaskHelper(SeleniumUtilities):
 
                 # Шаг 5: Повторная попытка найти сеть в списке
                 logger.info(f"Шаг 5: Повторная попытка найти {target_network} в списке сетей")
-                network_selector = (
-                    By.XPATH,
-                    f'//div[@data-testid="{target_network}"]/ancestor::div[contains(@class, "multichain-network-list-item")]'
-                )
-                if self._click_element(network_selector, timeout=5):
-                    logger.info(f" (ensure_monad_testnet_active), Успешно переключились на {target_network}")
+                if self.try_to_find_monad_testnet(target_network):
                     return True
-
 
                 logger.error("Не удалось активировать сеть после добавления")
                 return False
@@ -675,7 +674,7 @@ class MetaMaskHelper(SeleniumUtilities):
                     EC.presence_of_element_located(self.NETWORK_DISPLAY)
                 )
                 current_network = element.text
-                if current_network == expected_network:
+                if expected_network in current_network:
                     logger.info(f"Текущая сеть корректна: {current_network}")
                     return True
 

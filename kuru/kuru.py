@@ -1,3 +1,4 @@
+import random
 import time
 from pprint import pprint
 from typing import Dict, Any, Optional
@@ -8,9 +9,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 from  meta_mask import MetaMaskHelper, compare_addresses
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
-from config import logger
-
-
+from config import logger, MIN_PERCENT_MON, MAX_PERCENT_MON
+from utils import calculate_percentage
 
 
 def kuru(driver, mm_address):
@@ -80,8 +80,22 @@ def kuru(driver, mm_address):
 
     print(f'connection_wallet_to_site(): {connection_wallet_to_site()}')
 
+    def swap_coin():
+        # Нахождение selling токена и его количества
+        texts = SeleniumUtilities.get_elements_text(driver, "max-w-44 w-fit min-w-10 truncate")
+        print(f"You're selling: {texts[0]}\nYou're buying: {texts[1]}")
 
+        xpath_selector = "flex items-center justify-between text-secondary-text"
+        el_text = SeleniumUtilities.get_elements_text(driver, xpath_selector)
+        print(f'el_text: {el_text}')
+        logger.info(f"You're selling: {el_text} {texts[0]}")
+        if el_text:
+            number_tokens = float(el_text)
+            percent_from_mon = random.randint(MIN_PERCENT_MON, MAX_PERCENT_MON)
+            result = calculate_percentage(number_tokens, percent_from_mon)
+            print(f"{percent_from_mon}% от {number_tokens} {texts[0]} = {result}")
 
+    swap_coin()
 
 
 
