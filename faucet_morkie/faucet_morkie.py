@@ -129,7 +129,7 @@ class MonadFaucet:
             xpath_selector = "//div[contains(@class, 'bg-green-900/40') and contains(., 'Success! Check your wallet') and .//span[text()='Transaction:']]"
             el = SeleniumUtilities.find_element_safely(driver, By.XPATH, xpath_selector)
             if el:
-                print(f'el.text: {el.text}')
+                # print(f'el.text: {el.text}')
                 message_text.append(el.text)
                 # logger.info(f"Message text el.text: {message_text[0]}")  # Для отладки
             else:  # если не удачный клейм, используем обычный метод

@@ -82,20 +82,46 @@ def kuru(driver, mm_address):
 
     def swap_coin():
         # Нахождение selling токена и его количества
+        token_exist = {'selling_token': {}, 'buying_token': {}}
         texts = SeleniumUtilities.get_elements_text(driver, "max-w-44 w-fit min-w-10 truncate")
-        print(f"You're selling: {texts[0]}\nYou're buying: {texts[1]}")
+        logger.debug(f'texts: {texts} ')
+
+        selling_symbol = token_exist['selling_token']['symbol'] = texts[0]
+        buying_symbol = token_exist['buying_token']['symbol'] = texts[1]
 
         xpath_selector = "flex items-center justify-between text-secondary-text"
         el_text = SeleniumUtilities.get_elements_text(driver, xpath_selector)
-        print(f'el_text: {el_text}')
-        logger.info(f"You're selling: {el_text} {texts[0]}")
-        if el_text:
-            number_tokens = float(el_text)
-            percent_from_mon = random.randint(MIN_PERCENT_MON, MAX_PERCENT_MON)
-            result = calculate_percentage(number_tokens, percent_from_mon)
-            print(f"{percent_from_mon}% от {number_tokens} {texts[0]} = {result}")
+        logger.debug(f'el_text: {el_text} ')
 
-    swap_coin()
+        if not el_text[1]:
+            number_tokens_selling = token_exist['selling_token']['number_tokens'] = 0.0
+        else:
+            number_tokens_selling = token_exist['selling_token']['number_tokens'] = float(el_text[1])
+            if number_tokens_selling == 0.0:
+                logger.debug(f"Токенов {selling_symbol} в кошельке нет")
+            logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
+
+        if not el_text[2]:
+            number_tokens_buying = token_exist['buying_token']['number_tokens'] = 0.0
+        else:
+            number_tokens_buying = token_exist['buying_token']['number_tokens'] = float(el_text[2])
+
+        percent_from_mon = random.randint(MIN_PERCENT_MON, MAX_PERCENT_MON)
+        number_for_sell = calculate_percentage(number_tokens_selling, percent_from_mon)
+        logger.debug(f"Выбрано рандомно число: {percent_from_mon}% от {number_tokens_selling} {selling_symbol} = {number_for_sell} {selling_symbol} на продажу")
+        token_exist['selling_token']['number_for_sell'] = number_for_sell
+
+        if number_tokens_buying:
+            if number_tokens_buying == 0.0:
+                logger.debug(f"Токенов {buying_symbol} в кошельке нет")
+
+            logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
+
+        return token_exist
+
+
+
+    pprint(swap_coin())
 
 
 
