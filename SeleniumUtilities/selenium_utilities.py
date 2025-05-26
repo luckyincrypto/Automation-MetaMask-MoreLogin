@@ -485,20 +485,7 @@ class SeleniumUtilities:
         # print(attributes)
 
     @staticmethod
-    def get_elements_text(driver, class_names: str):
-        """
-        Ищет все элементы с заданными классами и возвращает их текст.
-
-        :param driver: Экземпляр Selenium WebDriver.
-        :param class_names: Строка с классами, разделёнными пробелами (например, "max-w-44 w-fit min-w-10 truncate").
-        :return: Список текстов найденных элементов.
-        """
-        class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
-        elements = driver.find_elements(By.CSS_SELECTOR, class_selector)  # Находим элементы
-        return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
-
-    @staticmethod
-    def get_elements_text(driver, class_names: str):
+    def get_elements(driver, class_names: str):
         """
         Ищет все элементы с заданными классами и возвращает их текст.
 
@@ -508,6 +495,5 @@ class SeleniumUtilities:
         """
         class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
         elements = SeleniumUtilities.find_elements_safely(driver, By.CSS_SELECTOR, class_selector)  # Находим элементы
-        # elements = driver.find_elements(By.CSS_SELECTOR, class_selector)  # Находим элементы
-        return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
-
+        return [el for el in elements]  # Извлекаем и очищаем текст
+        # return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
