@@ -480,9 +480,6 @@ class SeleniumUtilities:
 
         return attributes
 
-        # Использование:
-        # attributes = get_element_attributes(driver, main_block)
-        # print(attributes)
 
     @staticmethod
     def get_elements(driver, class_names: str):

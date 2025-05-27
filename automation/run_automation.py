@@ -165,7 +165,8 @@ if (-not $isAdmin) {{
 $taskName = "AutoMetaMaskMoreLogin"
 $taskFolder = "\\Automation-MetaMask-MoreLogin\\"
 $projectRoot = "{PROJECT_ROOT}"
-$logPath = "$projectRoot\\automation\\task_log.txt"
+$logPath = "$projectRoot\\automation\\app.log"
+# $logPath = "$projectRoot\\automation\\task_log.txt"
 $description = "Автоматический запуск скрипта MetaMask с интервалом {interval_minutes} минут. Следующий запуск: {next_run_time.strftime('%Y-%m-%d %H:%M:%S')}"
 
 Write-Host "Начало создания задачи..."

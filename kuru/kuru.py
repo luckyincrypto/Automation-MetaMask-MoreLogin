@@ -11,7 +11,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 from meta_mask import MetaMaskHelper, compare_addresses
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
 from config import logger, MIN_PERCENT_MON, MAX_PERCENT_MON
-from utils import calculate_percentage, adjust_window_position
+from utils import calculate_percentage, adjust_window_position, random_number_for_sell
 
 
 class KuruSwap:
@@ -148,23 +148,6 @@ class KuruSwap:
             logger.error(f'Error handling connect wallet click: {str(e)}')
             return False
 
-    # def _adjust_window_position(self):
-    #     """Настраивает позицию и размер окна MetaMask."""
-    #     try:
-    #         rect = self.driver.get_window_rect()
-    #         logger.debug(f"Window position: ({rect['x']}, {rect['y']}), Size: {rect['width']}x{rect['height']}")
-    #
-    #         self.driver.maximize_window()
-    #         time.sleep(2)
-    #
-    #         self.driver.set_window_rect(
-    #             rect['x'],
-    #             rect['y'],
-    #             rect['width'],
-    #             rect['height']
-    #         )
-    #     except Exception as e:
-    #         logger.error(f'Error adjusting window position: {str(e)}')
 
     def get_token_info(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -176,7 +159,6 @@ class KuruSwap:
                 'selling_token': {
                     'symbol': str,
                     'number_tokens': float,
-                    'quantity_for_sale': float
                 },
                 'buying_token': {
                     'symbol': str,
@@ -194,6 +176,11 @@ class KuruSwap:
                 self.TOKEN_SELECTORS['symbol']
             )
             logger.debug(f'Found token symbols: {els_symbol_list[0].text.strip()}, and: {els_symbol_list[1].text.strip()}')
+
+            # if els_symbol_list[0].safe
+
+
+
 
             selling_symbol = token_exist['selling_token']['symbol'] = els_symbol_list[0].text.strip()
             buying_symbol = token_exist['buying_token']['symbol'] = els_symbol_list[1].text.strip()
@@ -214,36 +201,29 @@ class KuruSwap:
                     except Exception:
                         pass
 
-            print("els_info_list:", els_info_list)
             # Обработка баланса selling token
-            if not els_info_list[0]:
-                number_tokens_selling = token_exist['selling_token']['number_tokens'] = 0.0
+            logger.debug(f"els_info_list: {els_info_list}")
+
+            # Проверка наличия токенов
+            number_tokens_selling = float(els_info_list[0]) if els_info_list[0] not in [None, 0, '0'] else 0.0
+            token_exist.setdefault('selling_token', {})['number_tokens'] = number_tokens_selling
+
+            if number_tokens_selling == 0.0:
+                logger.debug(f"Токенов {selling_symbol} в кошельке нет")
             else:
-                number_tokens_selling = token_exist['selling_token']['number_tokens'] = float(els_info_list[0])
-                if number_tokens_selling == 0.0:
-                    logger.debug(f"Токенов {selling_symbol} в кошельке нет")
-                else:
-                    logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
+                logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
 
-            # Обработка баланса buying token
-            if not els_info_list[1]:
-                number_tokens_buying = token_exist['buying_token']['number_tokens'] = 0.0
+            # Обработка баланса buying token. Проверяем наличие данных и корректно преобразуем в float
+            number_tokens_buying = float(els_info_list[1]) if els_info_list[1] not in [None, 0, '0'] else 0.0
+
+            # Безопасное присваивание в `token_exist`
+            token_exist.setdefault('buying_token', {})['number_tokens'] = number_tokens_buying
+
+            # Логирование результата
+            if number_tokens_buying == 0.0:
+                logger.debug(f"Токенов {buying_symbol} в кошельке нет")
             else:
-                number_tokens_buying = token_exist['buying_token']['number_tokens'] = float(els_info_list[1])
-                if number_tokens_buying == 0.0:
-                    logger.debug(f"Токенов {buying_symbol} в кошельке нет")
-                else:
-                    logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
-
-            # Расчет количества для продажи
-            percent_from_mon = random.randint(MIN_PERCENT_MON, MAX_PERCENT_MON)
-            number_for_sell = calculate_percentage(number_tokens_selling, percent_from_mon)
-            token_exist['selling_token']['quantity_for_sale'] = number_for_sell
-
-            logger.debug(
-                f"Выбрано рандомно число: {percent_from_mon}% от {number_tokens_selling} {selling_symbol} = "
-                f"{number_for_sell} {selling_symbol} на продажу"
-            )
+                logger.debug(f'Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
 
             return token_exist
 
@@ -263,24 +243,83 @@ class KuruSwap:
             logger.error("Не удалось найти элементы для ввода числа")
 
         text_button = 'Swap'
-        element = SeleniumUtilities.find_button_by_text(self.driver, text_button)
-        if element and element.is_enabled() and element.is_displayed():
+        element_btn = SeleniumUtilities.find_button_by_text(self.driver, text_button)
+        if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
             css_selector_buying = '.app-container div.\!mt-0 input'
             elements_input_buying = SeleniumUtilities.find_element_safely(self.driver, By.CSS_SELECTOR, css_selector_buying)
             logger.debug(f"При продаже {number} получим: {elements_input_buying.get_attribute('value')}")
 
             quantity_will_purchase = elements_input_buying.get_attribute('value')
-            return quantity_will_purchase, element
+            return quantity_will_purchase, element_btn
 
-            # if SeleniumUtilities.click_safely(element):
-            #     logger.info(f" (input_number_for_sell), Кликнули на кнопку: {text_button} успешно")
-            #     return True
-            # else:
-            #     logger.info(f" (input_number_for_sell), Кликнуть на кнопку: {text_button} не удалось")
-            #     return False
         else:
             logger.error("Элемент не найден или недоступен для нажатия")
             return False
+
+
+    def swap(self):
+        # Получаем информацию по токенам
+        token_info = self.get_token_info()
+        if not token_info:
+            logger.error(" (kuru), Failed to get token info")
+            return False
+        logger.debug(f' (kuru), Initial token_info: {token_info}')
+
+        refresh_element = token_info['element_refresh']
+        number_tokens_selling = token_info['selling_token']['number_tokens']
+        selling_symbol = token_info['selling_token']['symbol']
+
+        quantity_for_sale = token_info['selling_token']['quantity_for_sale'] = random_number_for_sell(selling_symbol,
+                                                                                                      number_tokens_selling)
+        quantity_will_purchase, element_btn_swap = self.input_number_for_sell(quantity_for_sale)
+        if not quantity_will_purchase and not element_btn_swap:
+            logger.error(" (kuru), Failed to input number for sell")
+            return None
+
+
+        window_kuru = self.driver.current_window_handle  # Определяем вкладку Kuru
+        logger.debug(f' (kuru), Current opened Kuru tab: {window_kuru}')
+        current_windows = self.driver.window_handles  # Определяем все открытые вкладки
+        logger.debug(f' (kuru), Current opened tabs: {current_windows}')
+
+        token_info['buying_token']['quantity_will_purchase'] = quantity_will_purchase
+        if not SeleniumUtilities.click_safely(element_btn_swap):
+            logger.error(" (kuru), Failed to click button <Swap>")
+            if not SeleniumUtilities.click_safely(refresh_element):
+                logger.error(" (kuru), Failed to click button <Refresh quote>")
+            logger.error(" (kuru), Success click button <Refresh quote>")
+            if not SeleniumUtilities.click_safely(element_btn_swap):
+                logger.error(" (kuru), Failed to 2nd time click button <Swap>")
+
+        # После успешного нажатия на кнопку <SWAP> на сайте Kuru, открывается вкладка MetaMask где нажимаем кнопку <Confirm>.
+        new_window_mm = SeleniumUtilities.switch_to_new_window(self.driver, current_windows)
+        logger.debug(f' (kuru), New tab MetaMask is opened: {new_window_mm}')
+        if new_window_mm:
+            time.sleep(1)
+            text_btn = 'Confirm'  # Transaction request
+            button_element = SeleniumUtilities.find_button_by_text(self.driver, text_btn)
+            if button_element:
+                button_element.click()
+
+        # После успешного нажатия на кнопку <Confirm> в MetaMask, переходим обратно на вкладку с сайтом Kuru.
+        self.driver.switch_to.window(window_kuru)
+        if self.driver.current_window_handle == window_kuru:
+            logger.debug(f" (kuru), On tab Kuru website again")
+
+        # После успешного взаимодействия с MetaMask на сайте Kuru нажимаем кнопку <Go back>
+        btn_name = 'Go back'
+        button_element = SeleniumUtilities.find_button_by_text(self.driver, btn_name)
+        if button_element:
+            button_element.click()
+
+        time.sleep(5)
+        self.driver.refresh()
+
+        # После успешного нажатия на кнопку <Go back> проверяем свапнутые токены
+        token_info_after_swap = self.get_token_info()
+        logger.debug(f" (kuru), token_info_after_swap: {token_info_after_swap}")
+
+        return True
 
 
 
@@ -300,43 +339,16 @@ def kuru(driver, mm_address):
         kuru_swap = KuruSwap(driver)
 
         if not kuru_swap.open_website():
+            logger.error(f" (kuru), Failed to open website {'Kuru'}")
             return None
 
         if not kuru_swap.connect_wallet(mm_address):
+            logger.error(" (kuru), Failed to connect MetaMask wallet")
             return None
 
-        token_info = kuru_swap.get_token_info()
-        # if 'element_refresh' in token_info:
-        refresh_element = token_info['element_refresh']
-
-        # print(f'token_info: {token_info}')
-
-        quantity_for_sale = token_info['selling_token']['quantity_for_sale']
-        quantity_will_purchase, element = kuru_swap.input_number_for_sell(quantity_for_sale)
-        if not quantity_will_purchase and not element:
-            logger.error("Failed to input number for sell")
-
-        token_info['buying_token']['quantity_will_purchase'] = quantity_will_purchase
-        if not SeleniumUtilities.click_safely(element):
-            logger.error("Failed to click button <Swap>")
-            if not SeleniumUtilities.click_safely(refresh_element):
-                logger.error("Failed to click button <Refresh quote>")
-            logger.error("Success click button <Refresh quote>")
-            if not SeleniumUtilities.click_safely(element):
-                logger.error("Failed to 2nd time click button <Swap>")
-        print(f"token_info: {token_info}")
+        kuru_swap.swap()
 
 
-
-
-
-        time.sleep(2)
-        # SeleniumUtilities.click_safely(refresh_element)
-        # kuru_swap.input_number_for_sell(number_for_sell+1.0)
-        #
-        # time.sleep(2)
-        # SeleniumUtilities.click_safely(refresh_element)
-        # kuru_swap.input_number_for_sell(number_for_sell + 3.0)
 
     except Exception as e:
         logger.error(f'Error in kuru function: {str(e)}')

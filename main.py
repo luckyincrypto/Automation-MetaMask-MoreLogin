@@ -405,22 +405,22 @@ async def operationEnv(
             time.sleep(5)
             # Проверка БД на предмет наступления времени в необходимости выполнения активности faucet_morkie
             # и занесением результата в БД.
-            # try:
-            #     if wallet_mm_from_browser_extension:
-            #         process_activity(driver, wallet_mm_from_browser_extension, row)
-            #     else:
-            #         process_activity(driver, mm_address, row)
-            # except DatabaseError as e:
-            #     logger.error(f"Database error in operationEnv: {e}")
-            #     raise
-            # except Exception as e:
-            #     logger.error(f"Error processing activity: {e}")
-            #     raise
+            try:
+                if wallet_mm_from_browser_extension:
+                    process_activity(driver, wallet_mm_from_browser_extension, row)
+                else:
+                    process_activity(driver, mm_address, row)
+            except DatabaseError as e:
+                logger.error(f"Database error in operationEnv: {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Error processing activity: {e}")
+                raise
             # helper.open_tab("https://faucet.morkie.xyz/monad")
 
             time.sleep(5)
             # Активность на сайте: https://www.kuru.io/
-            kuru(driver, mm_address)
+            # kuru(driver, mm_address)
 
             # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
             # helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")

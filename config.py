@@ -150,3 +150,5 @@ MAX_RECORDS_PER_PROFILE = config.max_records_per_profile
 # Настройки обработки активностей Kuru
 MIN_PERCENT_MON = config.kuru_activity_settings.get("MIN_PERCENT_MON")
 MAX_PERCENT_MON = config.kuru_activity_settings.get("MAX_PERCENT_MON")
+MIN_PERCENT_TOKEN = config.kuru_activity_settings.get("MIN_PERCENT_TOKEN")
+MAX_PERCENT_TOKEN = config.kuru_activity_settings.get("MAX_PERCENT_TOKEN")

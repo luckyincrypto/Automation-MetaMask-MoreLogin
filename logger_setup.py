@@ -17,7 +17,7 @@ LOG_COLORS = {
 }
 
 LOG_LEVEL_CONSOLE = logging.DEBUG
-LOG_LEVEL_FILE = logging.INFO  # WARNING
+LOG_LEVEL_FILE = logging.DEBUG  # INFO, WARNING
 
 logger = None
 
