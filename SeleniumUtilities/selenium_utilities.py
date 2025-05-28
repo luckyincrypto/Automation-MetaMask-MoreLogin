@@ -482,7 +482,7 @@ class SeleniumUtilities:
 
 
     @staticmethod
-    def get_elements(driver, class_names: str):
+    def get_elements(driver, class_names: str) -> List[str]:
         """
         Ищет все элементы с заданными классами и возвращает их текст.
 
@@ -492,5 +492,5 @@ class SeleniumUtilities:
         """
         class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
         elements = SeleniumUtilities.find_elements_safely(driver, By.CSS_SELECTOR, class_selector)  # Находим элементы
-        return [el for el in elements]  # Извлекаем и очищаем текст
+        return [el for el in elements]  # Получаем список элементов
         # return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
