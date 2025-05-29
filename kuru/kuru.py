@@ -316,7 +316,7 @@ class KuruSwap:
                 time.sleep(2)
                 continue  # переходит сразу к следующему кругу цикла.
 
-            logger.debug('selling_symbol', selling_symbol)
+            logger.debug(f'selling_symbol: {selling_symbol}')
             if not selling_symbol.lower() == 'mon':
                 time.sleep(5)
                 new_window_mm = SeleniumUtilities.switch_to_new_window(self.driver, current_windows)
