@@ -387,6 +387,7 @@ def kuru(driver, mm_address):
                 logger.error(f" (kuru), Failed to open website {'Kuru'}")
                 continue  # переходит сразу к следующему кругу цикла.
             logger.debug(f" (kuru), Opened website {'Kuru'}")
+            break  # выход из цикла
 
         # Подключаем кошелек
         while True:
