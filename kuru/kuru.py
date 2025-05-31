@@ -387,10 +387,12 @@ def kuru(driver, mm_address):
         logger.debug(f" (kuru), Opened website {'Kuru'}")
 
         # Подключаем кошелек
-        if not kuru_swap.connect_wallet(mm_address):
-            logger.error(" (kuru), Failed to connect MetaMask wallet")
-            return False
-        logger.debug(" (kuru), Connected MetaMask wallet")
+        while True:
+            if not kuru_swap.connect_wallet(mm_address):
+                logger.error(" (kuru), Failed to connect MetaMask wallet")
+                continue  # переходит сразу к следующему кругу цикла.
+            logger.debug(" (kuru), Connected MetaMask wallet")
+            break  # выход из цикла
 
         # Получаем информацию по токенам
         token_info_before_swap = kuru_swap.get_token_info()
