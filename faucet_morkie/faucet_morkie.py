@@ -92,7 +92,8 @@ class MonadFaucet:
                 r'Claim limit exceeded',
                 r'Claim limit reached',
                 r'Try again in \d+h \d+m',
-                r'Please try again later'
+                r'Please try again later',
+                r"You've already claimed. ",
             ],
             'require_morkie_id': [
                 r'You need a Morkie ID',
@@ -104,7 +105,8 @@ class MonadFaucet:
                 r'Failed to send transaction',
                 r'Too many requests. Please try again later.',
                 r'Network error. Check your connection and try again.',
-                r'error'
+                r'error',
+                r'Server error. Please try again later.'
             ],
             'success': [
                 r'Success!',
@@ -134,6 +136,7 @@ class MonadFaucet:
                 # logger.info(f"Message text el.text: {message_text[0]}")  # Для отладки
             else:  # если не удачный клейм, используем обычный метод
                 text_result = SeleniumUtilities.find_text(main_block, list(sum(STATUS_PATTERNS.values(), [])))
+                logger.debug(f' (get_faucet_status), text_result: {text_result}')
                 message_text.append(text_result['elements'][0].text)
                 # logger.info(f"Message text ['elements'][0].text: {message_text[0]}")  # Для отладки
             # logger.info(f"Message text: {message_text}")  # Для отладки

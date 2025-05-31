@@ -248,7 +248,7 @@ class KuruSwap:
             logger.debug(f"При продаже {number} получим: {elements_input_buying.get_attribute('value')}")
 
             quantity_will_purchase = elements_input_buying.get_attribute('value')
-            return quantity_will_purchase, element_btn
+            return quantity_will_purchase
 
         else:
             logger.error("Элемент не найден или недоступен для нажатия")
@@ -263,8 +263,8 @@ class KuruSwap:
 
         quantity_for_sale = token_info_swap['selling_token']['quantity_for_sale'] = random_number_for_sell(selling_symbol,
                                                                                                       number_tokens_selling)
-        quantity_will_purchase, element_btn_swap = self.input_number_for_sell(quantity_for_sale)
-        if not quantity_will_purchase and not element_btn_swap:
+        quantity_will_purchase = self.input_number_for_sell(quantity_for_sale)
+        if not quantity_will_purchase:
             logger.error(" (swap), Failed to input number for sell")
             return False
 
@@ -280,14 +280,20 @@ class KuruSwap:
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
-            if not SeleniumUtilities.click_safely(element_btn_swap):
-                logger.error(" (swap), Failed to click button <Swap>")
-                if not SeleniumUtilities.click_safely(refresh_element):
-                    logger.error(" (swap), Failed to click button <Refresh quote>")
+            logger.debug(f'attempt №: {attempt}')
+            time.sleep(3)
+            text_button = 'Swap'
+            element_btn = SeleniumUtilities.find_button_by_text(self.driver, text_button)
+            if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
+                logger.debug(f'element_btn and element_btn.is_enabled() and element_btn.is_displayed(): OK')
+                if not SeleniumUtilities.click_safely(element_btn):
+                    logger.error(" (swap), Failed to click button <Swap>")
+                    if not SeleniumUtilities.click_safely(refresh_element):
+                        logger.error(" (swap), Failed to click button <Refresh quote>")
+                        continue  # переходит сразу к следующему кругу цикла.
+                    logger.error(" (swap), Success click button <Refresh quote>")
+                    time.sleep(2)
                     continue  # переходит сразу к следующему кругу цикла.
-                logger.error(" (swap), Success click button <Refresh quote>")
-                time.sleep(2)
-                continue  # переходит сразу к следующему кругу цикла.
 
 
             # После успешного нажатия на кнопку <SWAP> на сайте Kuru, открывается вкладка MetaMask где нажимаем кнопку <Confirm>.
@@ -316,7 +322,7 @@ class KuruSwap:
                 time.sleep(2)
                 continue  # переходит сразу к следующему кругу цикла.
 
-            logger.debug(f'selling_symbol: {selling_symbol}')
+            logger.debug(f'selling_symbol, {selling_symbol}')
             if not selling_symbol.lower() == 'mon':
                 time.sleep(5)
                 new_window_mm = SeleniumUtilities.switch_to_new_window(self.driver, current_windows)
@@ -394,7 +400,6 @@ def kuru(driver, mm_address):
         logger.debug(f' (kuru), Get token_info_before_swap successfully')
 
         # Если есть токены в кошельке более чем 0,2 и это MON, то продаем его
-        print(f' (kuru), token_info_before_swap[selling_token][number_tokens] 1 : {token_info_before_swap['selling_token']['number_tokens']}')
         if token_info_before_swap['selling_token']['number_tokens'] > 0.2 and token_info_before_swap['selling_token']['symbol'].lower() == 'mon':
             # Вводим количество токенов для продажи и получаем количество получаемых токенов
             if not kuru_swap.swap(token_info_before_swap):

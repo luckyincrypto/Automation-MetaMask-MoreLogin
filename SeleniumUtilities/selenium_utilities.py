@@ -302,7 +302,7 @@ class SeleniumUtilities:
             try:
                 if el['text'] and isinstance(el['text'], str):
                     text = el['text'].strip().lower()
-                    # logger.debug(f'text: {text}')
+                    # logger.debug(f' (SeleniumUtilities.find_text), text: {text}')
                     element = el['element']
 
                     # Проверка видимости
