@@ -381,10 +381,12 @@ def kuru(driver, mm_address):
         kuru_swap = KuruSwap(driver)
 
         # Открываем сайт
-        if not kuru_swap.open_website():
-            logger.error(f" (kuru), Failed to open website {'Kuru'}")
-            return False
-        logger.debug(f" (kuru), Opened website {'Kuru'}")
+        while True:
+            driver.refresh()
+            if not kuru_swap.open_website():
+                logger.error(f" (kuru), Failed to open website {'Kuru'}")
+                continue  # переходит сразу к следующему кругу цикла.
+            logger.debug(f" (kuru), Opened website {'Kuru'}")
 
         # Подключаем кошелек
         while True:
