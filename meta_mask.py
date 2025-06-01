@@ -8,6 +8,8 @@ from pprint import pprint
 import pyperclip
 from selenium.common import WebDriverException
 from selenium.webdriver import ActionChains, Keys
+from selenium.webdriver.common.actions.action_builder import ActionBuilder
+from selenium.webdriver.common.actions.pointer_input import PointerInput
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -63,6 +65,35 @@ class MetaMaskHelper(SeleniumUtilities):
         """Проверяет адрес кошелька в MetaMask."""
         self.driver.refresh()
         self.driver.get(f"{self.base_url}")
+
+        # Для клика в стороне модального окна, чтобы его закрыть
+        # Получить размеры окна браузера
+        viewport_width = self.driver.execute_script("return window.innerWidth;")
+        viewport_height = self.driver.execute_script("return window.innerHeight;")
+
+        # Вычислить координаты (25% от левого края, 25% от верха)
+        x = int(viewport_width * 0.25)
+        y = int(viewport_height * 0.25)
+
+        # Добавить красную точку в вычисленных координатах
+        self.driver.execute_script(f"""
+            var dot = document.createElement('div');
+            dot.style.position = 'absolute';
+            dot.style.left = '{x}px';
+            dot.style.top = '{y}px';
+            dot.style.width = '10px';
+            dot.style.height = '10px';
+            dot.style.backgroundColor = 'red';
+            dot.style.zIndex = '9999';
+            document.body.appendChild(dot);
+        """)
+        time.sleep(5)
+
+        # Выполнить клик
+        actions_builder = ActionBuilder(self.driver, mouse=PointerInput("mouse", "default"))
+        actions_builder.pointer_action.move_to_location(x, y).click()
+        actions_builder.perform()
+        time.sleep(1)
 
         try:
             copy_btn = self.find_element_safely(
