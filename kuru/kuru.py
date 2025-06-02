@@ -3,18 +3,12 @@ import time
 from pprint import pprint
 from typing import Dict, Any, Optional, Tuple
 
-from pycparser.c_ast import While
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
-from trio import fail_after
 
 from meta_mask import MetaMaskHelper, compare_addresses
 from SeleniumUtilities.selenium_utilities import SeleniumUtilities
-from config import logger, MIN_PERCENT_MON, MAX_PERCENT_MON
-from utils import calculate_percentage, adjust_window_position, random_number_for_sell
+from config import logger
+from utils import adjust_window_position, random_number_for_sell
 
 
 class KuruSwap:
@@ -151,7 +145,6 @@ class KuruSwap:
             logger.error(f'Error handling connect wallet click: {str(e)}')
             return False
 
-
     def get_token_info(self) -> Dict[str, Dict[str, Any]]:
         """
         Получает информацию о токенах для свопа.
@@ -253,8 +246,6 @@ class KuruSwap:
         else:
             logger.error("Элемент не найден или недоступен для нажатия")
             return False
-
-
 
     def swap(self, token_info_swap: Dict[str, Dict[str, Any]]):
         refresh_element = token_info_swap['element_refresh']
@@ -360,9 +351,6 @@ class KuruSwap:
         else:
             logger.error(" (swap), Max swap attempts reached")
             return False
-
-
-
 
 
 def kuru(driver, mm_address):

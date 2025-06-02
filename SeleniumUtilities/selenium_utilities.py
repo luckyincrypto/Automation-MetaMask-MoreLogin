@@ -3,6 +3,7 @@ import random
 from pprint import pprint
 
 from selenium.webdriver import Keys
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (TimeoutException, ElementClickInterceptedException, NoSuchElementException)
 from selenium.webdriver.common.by import By
@@ -377,12 +378,10 @@ class SeleniumUtilities:
     def find_and_click_child_by_text(parent_element, child_text, partial_match=True):
         """
         Ищет дочерний элемент по заданному тексту внутри родительского элемента и кликает по нему.
-
         Параметры:
             parent_element: WebElement - родительский элемент, в котором будет производиться поиск
             child_text: str - текст для поиска в дочерних элементах
             partial_match: bool - если True, ищет частичное совпадение текста (по умолчанию True)
-
         Возвращает:
             bool - True, если элемент был найден и по нему кликнули, иначе False
         """
@@ -396,41 +395,43 @@ class SeleniumUtilities:
                         element_text = child.text.strip()
 
                         # Проверяем точное совпадение с MetaMask
-                        if child_text.lower() == "metamask" and element_text.lower() == "metamask":
+                        if child_text.lower() == element_text.lower():
+                        # if child_text.lower() == "metamask" and element_text.lower() == "metamask":
                             if child.is_displayed() and child.is_enabled():
-                                logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
+                                logger.debug(f" (find_and_click_child_by_text), Найден элемент с текстом: '{element_text}'. Попытка клика...")
 
                                 if SeleniumUtilities.click_safely(child):
-                                    logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
+                                    logger.debug(f" (find_and_click_child_by_text), Успешный клик по элементу с текстом: '{element_text}'")
                                     return True
                                 else:
-                                    logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                                    logger.warning(f" (find_and_click_child_by_text), Не удалось кликнуть по элементу с текстом: '{element_text}'")
                             break
 
                         # Для других случаев используем обычную логику
-                        elif child_text.lower() != "metamask":
+                        elif child_text.lower() != element_text.lower():
+                        # elif child_text.lower() != "metamask":
                             text_match = (child_text.lower() in element_text.lower()) if partial_match \
                                 else (child_text.lower() == element_text.lower())
 
                             if text_match and child.is_displayed() and child.is_enabled():
-                                logger.debug(f"Найден элемент с текстом: '{element_text}'. Попытка клика...")
+                                logger.debug(f" (find_and_click_child_by_text), Найден элемент с текстом: '{element_text}'. Попытка клика...")
 
                                 if SeleniumUtilities.click_safely(child):
-                                    logger.debug(f"Успешный клик по элементу с текстом: '{element_text}'")
+                                    logger.debug(f" (find_and_click_child_by_text), Успешный клик по элементу с текстом: '{element_text}'")
                                     return True
                                 else:
-                                    logger.warning(f"Не удалось кликнуть по элементу с текстом: '{element_text}'")
+                                    logger.warning(f" (find_and_click_child_by_text), Не удалось кликнуть по элементу с текстом: '{element_text}'")
                                 break
 
                 except Exception as e:
-                    logger.exception(f"Ошибка при обработке элемента: {str(e)}")
+                    logger.exception(f" (find_and_click_child_by_text), Ошибка при обработке элемента: {str(e)}")
                     continue
 
-            logger.warning(f"Не найден кликабельный элемент с текстом: '{child_text}'")
+            logger.warning(f" (find_and_click_child_by_text), Не найден кликабельный элемент с текстом: '{child_text}'")
             return False
 
         except Exception as e:
-            logger.exception(f"Ошибка в find_and_click_child_by_text: {str(e)}")
+            logger.exception(f" (find_and_click_child_by_text), Ошибка в find_and_click_child_by_text: {str(e)}")
             return False
 
     @staticmethod
@@ -484,13 +485,25 @@ class SeleniumUtilities:
     @staticmethod
     def get_elements(driver, class_names: str) -> List[str]:
         """
-        Ищет все элементы с заданными классами и возвращает их текст.
-
+        Ищет все элементы с заданными классами и возвращает список элементов.
         :param driver: Экземпляр Selenium WebDriver.
         :param class_names: Строка с классами, разделёнными пробелами (например, "max-w-44 w-fit min-w-10 truncate").
-        :return: Список текстов найденных элементов.
+        :return: Список найденных элементов.
         """
         class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
         elements = SeleniumUtilities.find_elements_safely(driver, By.CSS_SELECTOR, class_selector)  # Находим элементы
         return [el for el in elements]  # Получаем список элементов
         # return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
+
+    @staticmethod
+    def get_element(driver, class_names: str) -> WebElement:
+        """
+        Ищет элемент с заданными классами и возвращает его.
+        :param driver: Экземпляр Selenium WebDriver.
+        :param class_names: Строка с классами, разделёнными пробелами (например, "max-w-44 w-fit min-w-10 truncate").
+        :return: Элемент с заданными классами.
+        """
+        class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
+        element = SeleniumUtilities.find_element_safely(driver, By.CSS_SELECTOR, class_selector)  # Находим элементы
+        return element # Получаем 1 элемент
+
