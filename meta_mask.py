@@ -429,25 +429,25 @@ class MetaMaskHelper(SeleniumUtilities):
 
         return False
 
-    def pop_up_window_close(self):
-        """Закрытие всплывающих окон."""
-        try:
-            got_it_btn = self.find_element_safely(
-                self.driver,
-                By.XPATH,
-                "//button[contains(text(), 'Got it')]",
-                timeout=3
-            )
-
-            if got_it_btn:
-                got_it_btn.click()
-                logger.debug("(pop_up_window_close) Всплывающее окно закрыто")
-                return True
-            return None
-
-        except Exception:
-            logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
-            return False
+    # def pop_up_window_close(self):
+    #     """Закрытие всплывающих окон."""
+    #     try:
+    #         got_it_btn = self.find_element_safely(
+    #             self.driver,
+    #             By.XPATH,
+    #             "//button[contains(text(), 'Got it')]",
+    #             timeout=3
+    #         )
+    #
+    #         if got_it_btn:
+    #             got_it_btn.click()
+    #             logger.debug("(pop_up_window_close) Всплывающее окно закрыто")
+    #             return True
+    #         return None
+    #
+    #     except Exception:
+    #         logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
+    #         return False
 
     def starting_metamask(self, seed, password):
         """Основной процесс запуска MetaMask."""
@@ -456,20 +456,20 @@ class MetaMaskHelper(SeleniumUtilities):
 
         if self.unlock():
             if self.enter_password(password) and self.click_unlock_button():
-                self.pop_up_window_close()
+                # self.pop_up_window_close()
                 if self.check_page_url():
                     return True
 
                 if self.handle_incorrect_password():
                     logger.info("(starting_metamask) Восстановление кошелька")
                     if self.input_seed_phrase_and_password_restore_vault(seed, password):
-                        self.pop_up_window_close()
+                        # self.pop_up_window_close()
                         return True
 
         elif self.get_started():
             logger.info("(starting_metamask) Первоначальная настройка")
             if self.onboard_page(seed, password):
-                self.pop_up_window_close()
+                # self.pop_up_window_close()
                 return True
 
         return False
@@ -479,7 +479,7 @@ class MetaMaskHelper(SeleniumUtilities):
         if self.starting_metamask(seed, password):
             # self.version_mm()
             logger.update(f"Версия MM: {self.version_mm()}")
-            self.pop_up_window_close()
+            # self.pop_up_window_close()
             return self.check_mm_data_base(
                 mm_address,
                 row,

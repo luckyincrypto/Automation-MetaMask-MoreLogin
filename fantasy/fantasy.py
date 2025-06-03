@@ -28,23 +28,115 @@ class Fantasy:
         """
         self.driver = driver
 
+    def login(self):
+        #  Click button <Register and Play for free>
+        def register_button():
+            text_btn = 'Register and Play for free'
+            element = SeleniumUtilities.find_button_by_text(self.driver, text_btn)
+            text_element = element.text
+            logger.info(f' (login), Element with text: "{text_btn}" has text "{text_element}"')
+            if element:
+                logger.info(f' (login), Found element with text "{text_element}"')
+                if text_btn == text_element:
+                    SeleniumUtilities.click_safely(element)
+                    logger.info(f' (login), Clicked on the element with text {text_element}')
+                    return True
+                logger.debug(f' (login), text_btn != text_element: {text_btn} != {text_element}')
+            logger.error(f' (login), element not found')
+            return False
 
-    def open_website(self) -> bool:
+        #  Click button <Twitter> on pop up window "Log in or sign up"
+        def lofin_or_sign_up():
+            text_btn = 'Twitter'
+            # string(.) захватывает весь видимый текст, включая вложенные <span> и другие элементы внутри кнопки.
+            selector_xpath = f'//button[contains(string(.), "{text_btn}")]'
+            el_captcha = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, selector_xpath)
+            if el_captcha:
+                logger.info(f' (capcha), Found el_captcha try to click center of element')
+                # Получаем координаты элемента
+                rect = el_captcha.rect
+                x_center = rect['x'] + rect['width'] // 2
+                y_center = rect['y'] + rect['height'] // 2
+                logger.debug(f' (capcha), x_center: {x_center}, y_center: {y_center}')
+
+                # Эмулируем клик в центр элемента
+                actions = ActionChains(self.driver)
+                actions.move_to_element_with_offset(el_captcha, rect['width'] // 2,
+                                                    rect['height'] // 2).click().perform()
+                logger.debug(f' (capcha), Клик в центр элемента успешен')
+                return True
+
+            logger.error(f' (capcha), el_captcha not found')
+            return False
+
+        #  When successful connect to X then click button <Continue>
+        def continue_btn():
+            text_btn = 'Continue'
+            element = SeleniumUtilities.find_button_by_text(self.driver, text_btn)
+            text_element = element.text
+            logger.info(f' (continue_btn), Element with text: "{text_btn}" has text "{text_element}"')
+            if element:
+                logger.info(f' (continue_btn), Found element with text "{text_element}"')
+                if text_btn == text_element:
+                    SeleniumUtilities.click_safely(element)
+                    logger.info(f' (continue_btn), Clicked on the element with text {text_element}')
+                    return True
+                logger.debug(f' (continue_btn), text_btn != text_element: {text_btn} != {text_element}')
+            logger.error(f' (continue_btn), element not found')
+            return False
+
+        def capcha():
+            selector_xpath = '//input[@type="checkbox"]'
+            el_captcha = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, selector_xpath)
+            if el_captcha:
+                logger.info(f' (capcha), Found el_captcha try to click center of element')
+                # Получаем координаты элемента
+                rect = el_captcha.rect
+                x_center = rect['x'] + rect['width'] // 2
+                y_center = rect['y'] + rect['height'] // 2
+                logger.debug(f' (capcha), x_center: {x_center}, y_center: {y_center}')
+
+                # Эмулируем клик в центр элемента
+                actions = ActionChains(self.driver)
+                actions.move_to_element_with_offset(el_captcha, rect['width'] // 2,
+                                                    rect['height'] // 2).click().perform()
+                logger.debug(f' (capcha), Клик в центр элемента успешен')
+                return True
+
+            logger.error(f' (capcha), el_captcha not found')
+            return False
+
+        if register_button():
+            if lofin_or_sign_up():
+                if capcha():
+                    continue_btn()
+                    return True
+            return False
+        return False
+
+    def open_website(self) -> bool | None:
         """
         Открывает сайт https://monad.fantasy.top/shop.
-
         Returns:
             bool: True если сайт успешно открыт, False в противном случае
         """
         try:
-            logger.info('Opening Fantasy website')
+            logger.debug('Opening Fantasy website')
             self.driver.get(self.BASE_URL)
-            time.sleep(2)  # Ждем загрузку страницы
-            logger.info('Fantasy website opened successfully')
-            return True
+            time.sleep(3)  # Ждем загрузку страницы)
+
+            tab_tag_name = self.driver.current_url
+            logger.debug(f' (open_website), Current tab name: {tab_tag_name}')
+            if tab_tag_name == 'https://monad.fantasy.top/shop':
+                logger.info(f' (open_website), Fantasy website opened on page: {tab_tag_name}')
+                return True
+            else:
+                logger.info(f' (open_website), Fantasy website opened on page: {tab_tag_name}')
+                return False
+
         except Exception as e:
-            logger.error(f'Error opening Kuru website: {str(e)}')
-            return False
+            logger.error(f' (open_website), Error opening Kuru website: {str(e)}')
+            return None
 
     def claim(self):
         def first_click():
@@ -144,11 +236,11 @@ class Fantasy:
                         attempt = 0
                         while attempt < max_attempts:
                             attempt += 1
-                            logger.debug(f' (retweet_click, on_x_page), Attempt №: {attempt}')
+                            logger.debug(f' (retweetConfirm, on_x_page), Attempt №: {attempt}')
                             self.driver.refresh()
                             time.sleep(3)
                             # Нажимаем на кнопку <Repost>
-                            selector_btn_confirm = 'div[data-testid="retweetConfirm"][role="menuitem"]'
+                            selector_btn_confirm = 'div[data-testid="retweetConfirm"]'
                             element_retweet_btn_confirm = SeleniumUtilities.find_element_safely(self.driver,
                                                                                                 By.CSS_SELECTOR,
                                                                                                 selector_btn_confirm)
@@ -232,6 +324,7 @@ class Fantasy:
         if tab_tag_name == 'https://monad.fantasy.top/shop':
             logger.info(f' (claim), 1 Ждем результат спина и выигрыш')
             return True
+        return None
 
         # Здесь добавить логику для добавления в БД crypto_activities.sqlite3 в activity_type, через какое время и когда Claim будет активен
 
@@ -248,8 +341,10 @@ def fantasy(driver) -> None:
 
         # Открываем сайт https://monad.fantasy.top/shop
         if not fantasy.open_website():
-            logger.error(f" (kuru), Failed to open website {'Fantasy'}")
-        logger.debug(f" (kuru), Opened website {'Fantasy'}")
+            logger.info(f" (kuru), Login Fantasy")
+            fantasy.login()
+
+
         if not fantasy.claim():
             logger.info(f" (fantasy), Failed to claim or Continue")
         logger.debug(f" (fantasy), Claimed successfully")

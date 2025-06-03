@@ -122,7 +122,7 @@ class KuruSwap:
             current_windows = self.driver.window_handles
             logger.debug(f'Current windows: {current_windows}')
 
-            if not SeleniumUtilities.find_and_click_child_by_text(dialog_block, 'MetaMask'):
+            if not SeleniumUtilities.find_and_click_child_by_text(dialog_block, 'MetaMask', partial_match=False):
                 logger.error("Failed to click MetaMask button")
                 return False
 

@@ -171,7 +171,12 @@ class MonadFaucet:
     @staticmethod
     def process_claim(driver: Any, wallet_address: str) -> Dict[str, Any]:
         """Complete claim process with intelligent retry logic."""
-        for attempt in range(MAX_RETRIES):
+
+
+        attempt = 0
+        while attempt < MAX_RETRIES:
+            attempt += 1
+            logger.debug(f' (process_claim), Attempt №: {attempt}')
             try:
                 # Initial page load
                 driver.get(FAUCET_URL)
@@ -222,26 +227,34 @@ class MonadFaucet:
                     return result
 
                 # Retriable failures
-                if result['status'] == 'failed' and attempt < MAX_RETRIES - 1:
+                if result['status'] == 'failed' and attempt < MAX_RETRIES + 1:
                     delay = MonadFaucet.exponential_backoff(attempt)
                     logger.warning("Claim failed, retrying in %.1f seconds...", delay)
                     time.sleep(delay)
-                    continue
+                    continue  # переходит сразу к следующему кругу цикла.
+
+                # Retriable errors
+                if result['status'] == 'error' and attempt < MAX_RETRIES + 1:
+                    delay = MonadFaucet.exponential_backoff(attempt)
+                    logger.warning("Claim with error, retrying in %.1f seconds...", delay)
+                    time.sleep(delay)
+                    continue  # переходит сразу к следующему кругу цикла.
 
                 return result
 
             except Exception as e:
-                logger.error("Claim attempt %d failed: %s", attempt + 1, str(e))
-                if attempt == MAX_RETRIES - 1:
+                logger.error("Claim attempt %d failed: %s", attempt, str(e))
+                if attempt == MAX_RETRIES:
                     return {
                         'status': 'error',
                         'message': str(e),
                         'wallet_address': wallet_address,
-                        'attempt': attempt + 1,
+                        'attempt': attempt,
                         'activity_type': "Monad_Faucet_Portal"
                     }
                 delay = MonadFaucet.exponential_backoff(attempt)
                 time.sleep(delay)
+                continue  # переходит сразу к следующему кругу цикла.
 
         return {
             'status': 'max_retries_exceeded',
