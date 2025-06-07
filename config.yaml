@@ -29,6 +29,9 @@ GLOBAL_SETTINGS:
     MIN: 10       # null - задержка отключена, число - минимальное время в секундах
     MAX: 120       # null - задержка отключена, число - максимальное время в секундах
 
+  # Максимальное количество хранимых записей для каждого профиля в БД: crypto_activities
+  MAX_RECORDS_PER_PROFILE: 5
+
 
 
 
@@ -40,8 +43,9 @@ ACTIVITY_SETTINGS:
   SUCCESS_WAIT_TIME:
     HOURS: 24
     MINUTES: 3
-  # Максимальное количество хранимых записей для каждого профиля в БД: crypto_activities
-  MAX_RECORDS_PER_PROFILE: 5
+  # Устанавливаем активности по умолчанию
+  # список активностей, которые будут использоваться по умолчанию по порядку добавления
+  DEFAULT_ACTIVITIES: 'Monad_Faucet_Portal, Fantasy_Claim_XP'
 
 # Настройки обработки активностей Kuru
 KURU_ACTIVITY_SETTINGS:
@@ -60,4 +64,3 @@ KURU_ACTIVITY_SETTINGS:
   # Время ожидания после успешной свапа (часы, минуты)
   MIN_WAIT_TIME_BETWEEN_SWAP: 5 # минимальное время ожидания после успешного свапа
   MAX_WAIT_TIME_BETWEEN_SWAP: 15 # максимальное время ожидания после успешного свапа
-

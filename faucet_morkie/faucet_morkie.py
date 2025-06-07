@@ -171,8 +171,6 @@ class MonadFaucet:
     @staticmethod
     def process_claim(driver: Any, wallet_address: str) -> Dict[str, Any]:
         """Complete claim process with intelligent retry logic."""
-
-
         attempt = 0
         while attempt < MAX_RETRIES:
             attempt += 1

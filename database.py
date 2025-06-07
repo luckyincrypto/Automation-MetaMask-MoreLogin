@@ -5,7 +5,8 @@ import json
 from pprint import pprint
 from typing import Optional, List, Dict, TypedDict, Any, Tuple, Union
 from contextlib import contextmanager
-from config import DB_NAME, logger, config
+from config import DB_NAME, logger, config, DEFAULT_ACTIVITIES
+from fantasy.fantasy import Fantasy
 from faucet_morkie.faucet_morkie import MonadFaucet
 import random
 import os
@@ -166,89 +167,150 @@ class SQLiteDatabase:
             logger.error(f"Error checking data integrity: {e}")
             raise DatabaseError(f"Failed to check data integrity: {e}")
 
-    def should_process_activity_with_connection(self, conn, row: int, wallet_address: str) -> Tuple[bool, str]:
+    def should_process_activity_with_connection(self, conn, row: int, wallet_address: str,
+                                                activity_types: Optional[List[str]], default_activities: Optional[List[str]]) -> Tuple[bool, str, str]:
         """
-        Проверяет, нужно ли выполнять активность для профиля используя существующее соединение.
-        Возвращает кортеж (нужно_ли_выполнять, причина)
+        Проверяет, нужно ли выполнять активность для профиля, используя существующее соединение.
+
+        Универсальная логика:
+        - Если `activity_types=None` или пустой список, используем DEFAULT_ACTIVITIES `['Monad_Faucet_Portal', 'Fantasy_Claim_XP']`.
+        - Возвращает **только последнюю запись** для каждой активности.
+
+        Возвращает:
+        - `Tuple[bool, str]`: флаг выполнения и причина.
         """
+        global activity
         try:
-            cursor = conn.execute("""
-                SELECT * FROM activities
+            if not activity_types:
+                activity_types = default_activities
+                logger.debug(f"Using default activities: {activity_types}")
+            else:
+                logger.debug(f"Using provided activities: {activity_types}")
+
+            # Проверяем наличие записей для профиля
+            check_query = "SELECT COUNT(*) as count FROM activities WHERE profile_number = ?"
+            cursor = conn.execute(check_query, (row,))
+            count = cursor.fetchone()['count']
+            logger.debug(f"Total records for profile {row}: {count}")
+
+            # Динамически формируем SQL-запрос
+            query = f"""
+                SELECT * FROM activities AS a
                 WHERE profile_number = ?
+                AND activity_type IN ({', '.join(['?' for _ in activity_types])})
+                AND timestamp = (
+                    SELECT MAX(timestamp) FROM activities AS sub
+                    WHERE sub.profile_number = a.profile_number
+                    AND sub.activity_type = a.activity_type
+                )
                 ORDER BY timestamp DESC
-                LIMIT 1
-            """, (row,))
+            """
 
-            last_activity = cursor.fetchone()
-            if last_activity:
-                last_activity = self._parse_activity_record(last_activity)
+            # Выполняем запрос с правильным количеством параметров
+            params = [row] + activity_types  # Создаем список параметров: [row, activity_type1, activity_type2, ...]
+            logger.debug(f"Executing query with params: {params}")
+            cursor = conn.execute(query, params)
+            last_activities = cursor.fetchall()
 
-            # Если нет записей для профиля
-            if not last_activity:
-                logger.update(f"Для Профиля № {row} не найдено предыдущих активностей в базе данных '{self.db_path}'")
-                return True, "No previous activities found"
+            # Подробное логирование результатов
+            if last_activities:
+                logger.debug(f"Found {len(last_activities)} activities for profile {row}:")
+                for activity in last_activities:
+                    logger.debug(f"Activity: type={activity['activity_type']}, status={activity['status']}, timestamp={activity['timestamp']}")
+            else:
+                logger.debug(f"No activities found for profile {row} with types {activity_types}")
 
-            # Проверяем адрес кошелька
-            if last_activity['wallet_address'] != wallet_address:
-                logger.warning(f"Несоответствие адреса кошелька для Профиля № {row}. БД: {last_activity['wallet_address']}, Текущий: {wallet_address}")
-                return True, "Wallet address changed"
+            # Если нет записей, проверяем почему
+            if not last_activities:
+                # Проверяем записи для профиля без фильтра по activity_type
+                check_query = """
+                    SELECT activity_type, COUNT(*) as count, MAX(timestamp) as last_timestamp
+                    FROM activities
+                    WHERE profile_number = ?
+                    GROUP BY activity_type
+                """
+                cursor = conn.execute(check_query, (row,))
+                activity_counts = cursor.fetchall()
+                logger.debug(f"Activity counts for profile {row}:")
+                for count in activity_counts:
+                    logger.debug(f"Type: {count['activity_type']}, Count: {count['count']}, Last: {count['last_timestamp']}")
+
+                # Если есть записи, но не для запрошенных типов
+                # if activity_counts:
+                #     logger.warning(f"Профиль № {row} имеет записи, но не для запрошенных типов активностей")
+                #     return True, "Profile has records but not for requested activity types"
+                # else:
+                #     logger.warning(f"Профиль № {row} отсутствует в базе данных '{self.db_path}'")
+                #     return True, activity['activity_type'], "Profile not found in Data Base"
+
+            # Преобразуем записи в удобный формат
+            parsed_activities = [self._parse_activity_record(activity) for activity in last_activities]
+            logger.debug(f"Parsed activities for profile {row}: {parsed_activities}")
+
+
+            for activity in parsed_activities:
+                # Проверяем кошелек
+                if activity['wallet_address'] != wallet_address:
+                    logger.warning(f"Несоответствие кошелька для Профиля № {row}: БД({activity['wallet_address']}), "
+                                   f"Текущий({wallet_address} для активности {activity['activity_type']})")
+                    return True, activity['activity_type'], (f"Wallet address changed for: {activity['activity_type']} "
+                                                             f"at {activity['timestamp']}, but activity will be carried out")
+
+                for activity_type in activity_types:
+                    if activity_type not in activity['activity_type']:
+                        return True, activity_type, (f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']}"
+                                                                 f"{activity['activity_type']}, activity will be carried out")
 
             current_time = datetime.now()
 
-            # Если последняя активность успешна
-            if last_activity['status'] == 'success':
-                try:
-                    last_success_time = datetime.fromisoformat(last_activity['timestamp'])
-                    next_allowed_time = last_success_time + timedelta(hours=24, minutes=3)
+            # Проверяем статус последней активности
+            for activity in parsed_activities:
 
-                    if current_time >= next_allowed_time:
-                        logger.update(f"Для Профиля № {row} прошло 24ч 3м с последнего успеха в базе данных '{self.db_path}'")
-                        return True, "24h 3m passed since last success"
-                    logger.debug(f"Для Профиля № {row} ожидание до {next_allowed_time}")
-                    return False, f"Waiting until {next_allowed_time}"
-                except ValueError as e:
-                    logger.error(f"Ошибка парсинга временной метки для Профиля № {row}: {e}")
-                    return True, "Invalid timestamp format"
+                if activity['status'] == 'success':
+                    try:
+                        last_success_time = datetime.strptime(activity['timestamp'], '%Y-%m-%d %H:%M:%S')
+                        next_allowed_time = last_success_time + timedelta(hours=24, minutes=3)
 
-            # Если превышен лимит
-            if last_activity['status'] == 'limit_exceeded':
-                if not last_activity['next_attempt']:
-                    logger.warning(f"Для Профиля № {row} не установлено время следующей попытки при превышении лимита")
-                    return True, "No next attempt time set for limit_exceeded"
+                        if current_time >= next_allowed_time:
+                            return True, activity['activity_type'],  f"Waiting time passed since last success, {activity['activity_type']} activity will be carried out"
+                        return False, activity['activity_type'],  f"Waiting until {next_allowed_time.strftime('%Y-%m-%d %H:%M:%S')}"
 
-                try:
-                    next_attempt = datetime.fromisoformat(last_activity['next_attempt'])
-                    if current_time >= next_attempt:
-                        logger.update(f"Для Профиля № {row} достигнуто время следующей попытки в базе данных '{self.db_path}'")
-                        return True, "Next attempt time reached"
-                    logger.debug(f"Для Профиля № {row} ожидание до следующей попытки: {next_attempt}")
-                    return False, f"Waiting until next attempt: {next_attempt}"
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Ошибка парсинга времени следующей попытки для Профиля № {row}: {e}")
-                    return True, "Invalid next_attempt time format"
+                    except ValueError as e:
+                        logger.error(f"Error parsing timestamp for activity {activity['activity_type']}: {e}")
+                        return True, activity['activity_type'], f"Invalid timestamp format, {activity['activity_type']} activity will be carried out"
 
-            # Обработка статуса 'error' и других неожиданных статусов
-            if last_activity['status'] == 'error' or last_activity['status'] not in ['success', 'limit_exceeded']:
-                logger.warning(f"Неожиданный статус для Профиля № {row}: {last_activity['status']}")
-                # Проверяем настройки из config
-                if hasattr(config, 'activity_settings') and config.activity_settings.get('AUTO_PROCESS_UNEXPECTED_STATUS', True):
-                    return True, f"Unexpected status: {last_activity['status']}"
-                else:
-                    logger.warning(f"Автоматическая обработка неожиданных статусов отключена. Статус: {last_activity['status']}")
-                    return False, f"Unexpected status: {last_activity['status']} (auto-processing disabled)"
+                elif activity['status'] == 'limit_exceeded':
+                    try:
+                        if activity['next_attempt']:
+                            next_attempt = datetime.strptime(activity['next_attempt'], '%Y-%m-%d %H:%M:%S')
+                            if current_time >= next_attempt:
+                                return True, activity['activity_type'], f"Next attempt time reached, {activity['activity_type']} activity will be carried out"
+                            return False, activity['activity_type'], f"Waiting until next attempt: {next_attempt.strftime('%Y-%m-%d %H:%M:%S')}"
+                        else:
+                            logger.warning(f"No next_attempt time for limit_exceeded status in {activity['activity_type']}")
+                            return True, activity['activity_type'], f"No next attempt time set, {activity['activity_type']} activity will be carried out"
 
-            # Для других статусов
-            logger.warning(f"Неожиданный статус для Профиля № {row}: {last_activity['status']}")
-            return True, f"Unexpected status: {last_activity['status']}"
-        except DatabaseError as e:
-            logger.error(f"Ошибка базы данных в should_process_activity: {e}")
-            return True, f"Database error: {e}"
+                    except ValueError as e:
+                        logger.error(f"Error parsing next_attempt time for activity {activity['activity_type']}: {e}")
+                        return True, activity['activity_type'], f"Invalid next_attempt time format, {activity['activity_type']} activity will be carried out"
+
+                elif activity['status'] == 'error' or activity['status'] not in ['success', 'limit_exceeded']:
+                    logger.warning(f"Неожиданный статус для Профиля № {row}: {activity['status']}")
+                    if hasattr(config, 'activity_settings') and config.activity_settings.get(
+                            'AUTO_PROCESS_UNEXPECTED_STATUS', True):
+                        return True, activity['activity_type'], f"Unexpected status: {activity['status']}, {activity['activity_type']} activity will be carried out"
+                    return False, activity['activity_type'], f"Unexpected status: {activity['status']} (auto-processing disabled)"
+
+            return True, activity['activity_type'], "No previous activities found, activity will be carried out"
+
+        except Exception as e:
+            logger.error(f"Ошибка базы данных в should_process_activity_with_connection: {e}")
+            return True, activity['activity_type'], f"Database error: {e}"
 
     def insert_activity_with_connection(self, conn, row: int, activity_data: Dict[str, Any]):
         """Вставляет активность с указанием номера строки используя существующее соединение"""
         try:
             logger.debug(f"Начало вставки данных для Профиля № {row}")
-            # logger.debug(f"Полученные данные: {json.dumps(activity_data, indent=2, ensure_ascii=False)}")
 
             self._validate_activity_data(activity_data)
             activity_data['profile_number'] = row
@@ -259,8 +321,6 @@ class SQLiteDatabase:
             for field in fields_to_exclude:
                 details.pop(field, None)
 
-            # logger.debug(f"Подготовленные данные для вставки: {json.dumps(details, indent=2, ensure_ascii=False)}")
-
             # Подготовка параметров для вставки
             params = {
                 'profile_number': row,
@@ -270,15 +330,14 @@ class SQLiteDatabase:
                 'next_attempt': activity_data.get('next_attempt'),
                 'details': json.dumps(details, ensure_ascii=False)
             }
-            # logger.debug(f"Параметры для вставки: {json.dumps(params, indent=2, ensure_ascii=False)}")
 
-            # Выполнение вставки
+            # Выполнение вставки с использованием локального времени
             cursor = conn.execute("""
                 INSERT INTO activities (
                     profile_number, activity_type, status, wallet_address,
                     next_attempt, timestamp, details
                 ) VALUES (:profile_number, :activity_type, :status, :wallet_address,
-                         :next_attempt, datetime('now', 'localtime'), :details)
+                         :next_attempt, strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'), :details)
             """, params)
 
             # Проверка результата вставки
@@ -353,14 +412,16 @@ class SQLiteDatabase:
             logger.error(f"Error getting profiles status: {e}")
             raise DatabaseError(f"Failed to get profiles status: {e}")
 
-    def should_process_activity(self, row: int, wallet_address: str) -> Tuple[bool, str]:
+    def should_process_activity(self, row: int, wallet_address: str, activity_types) -> tuple[bool, str, str] | tuple[
+        bool, str]:
         """
         Проверяет, нужно ли выполнять активность для профиля.
         Возвращает кортеж (нужно_ли_выполнять, причина)
         """
         try:
+            logger.debug(f"DEFAULT_ACTIVITIES before call: {DEFAULT_ACTIVITIES}")
             with self._get_connection() as conn:
-                return self.should_process_activity_with_connection(conn, row, wallet_address)
+                return self.should_process_activity_with_connection(conn, row, wallet_address, activity_types, DEFAULT_ACTIVITIES)
         except DatabaseError as e:
             logger.error(f"Ошибка базы данных в should_process_activity для Профиля № {row}: {e}")
             return True, f"Database error: {e}"
@@ -403,7 +464,7 @@ class SQLiteDatabase:
     def __exit__(self, exc_type, exc_val, exc_tb):
         pass
 
-    def get_random_eligible_profile(self) -> Optional[Tuple[int, str]]:
+    def get_random_eligible_profile(self, activity_types=None) -> Optional[Tuple[int, str]]:
         """
         Выбирает случайный профиль, готовый к обработке
         Возвращает (row_number, wallet_address) или None если нет подходящих
@@ -427,15 +488,15 @@ class SQLiteDatabase:
                     row, wallet_address = profile['profile_number'], profile['wallet_address']
 
                     # Используем существующую логику проверки
-                    should_process, reason = self.should_process_activity_with_connection(
-                        conn, row, wallet_address
+                    should_process, activity_types, reason = self.should_process_activity_with_connection(
+                        conn, row, wallet_address, activity_types, DEFAULT_ACTIVITIES
                     )
 
                     if should_process:
                         eligible_profiles.append((row, wallet_address))
-                        logger.debug(f"Профиль {row} подходит для обработки: {reason}")
+                        logger.debug(f"Профиль {row} подходит для обработки:{activity_types}, причина: {reason}")
                     else:
-                        logger.debug(f"Профиль {row} не подходит: {reason}")
+                        logger.debug(f"Профиль {row} не подходит: {activity_types}, причина: {reason}")
 
                 if not eligible_profiles:
                     logger.info("Нет профилей, готовых к обработке")
@@ -455,7 +516,7 @@ class SQLiteDatabase:
             return None
 
 
-def process_activity(driver, wallet_mm_from_browser_extension, row):
+def process_activity(driver, wallet_mm_from_browser_extension, row, activity_types):
     logger.info(f"Начало обработки Профиль № {row}, адрес: {wallet_mm_from_browser_extension}")
     try:
         db = SQLiteDatabase()
@@ -465,8 +526,9 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
                 logger.warning("Data integrity check failed, attempting to continue")
 
             # Проверяем, нужно ли выполнять активность
-            should_process, reason = db.should_process_activity_with_connection(conn, row, wallet_mm_from_browser_extension)
-            logger.debug(f"Проверка необходимости обработки: should_process={should_process}, reason={reason}")
+            should_process, activity_type_carry_out, reason = db.should_process_activity_with_connection(conn, row, wallet_mm_from_browser_extension, activity_types, DEFAULT_ACTIVITIES)
+            logger.debug(f"Проверка необходимости обработки: should_process={should_process}, "
+                         f"activity_type_carry_out={activity_type_carry_out}, reason={reason}")
 
             if not should_process:
                 logger.update(f"Пропуск активности для Профиль № {row}. Причина: {reason}")
@@ -481,22 +543,49 @@ def process_activity(driver, wallet_mm_from_browser_extension, row):
                         logger.info("Activity skipped by user")
                         return
 
-            # Выполняем активность
-            try:
-                logger.debug(f"Вызов MonadFaucet.process для Профиля № {row}")
-                result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-                # logger.debug(f"Результат MonadFaucet.process: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            # Обрабатываем каждую активность из списка или из DEFAULT_ACTIVITIES
+            for activity_type in activity_types or DEFAULT_ACTIVITIES:
+                try:
+                    if activity_type_carry_out == activity_type:
+                        logger.debug(f"Активность {activity_type} для Профиля № {row}")
 
-                logger.update(f"Результат выполнения активности для Профиля № {row}: {result}")
+                        if activity_type == 'Monad_Faucet_Portal':
+                            logger.debug(f"Активность {activity_type}. Вызов MonadFaucet.process для Профиля № {row}")
+                            result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
+                        if activity_type == 'Fantasy_Claim_XP':
+                            logger.debug(f"Активность {activity_type}. Вызов Fantasy.fantasy для Профиля № {row}")
+                            fantasy_instance = Fantasy(driver)
+                            result = fantasy_instance.fantasy()
 
-                # Сохраняем результат
-                logger.debug(f"Начало сохранения результата в БД для Профиля № {row}")
-                db.insert_activity_with_connection(conn, row, result)
-                logger.debug(f"Результат успешно сохранен в БД для Профиля № {row}")
-                return True
-            except Exception as e:
-                logger.error(f"Error processing activity for Профиль № {row}: {e}")
-                raise
+                        # Сохраняем результат
+                        logger.debug(f"Начало сохранения результата активности {activity_type} в БД для Профиля № {row}")
+                        if result:
+                            logger.debug(f"Результат выполнения активности {activity_type} для Профиля № {row}: {result}")
+                            # Сохраняем результат
+                            db.insert_activity_with_connection(conn, row, result)
+                            logger.debug(f"Результат активности {activity_type} успешно сохранен в БД для Профиля № {row}")
+                        else:
+                            logger.warning(f"Активность {activity_type} не вернула результат для Профиля № {row}")
+
+                except Exception as e:
+                    logger.error(f"Error processing активности {activity_type} for Профиль № {row}: {e}")
+                    # Создаем запись об ошибке
+                    error_data = {
+                        'activity_type': activity_type,
+                        'status': 'error',
+                        'wallet_address': wallet_mm_from_browser_extension,
+                        'next_attempt': None,
+                        'details': {
+                            'error': str(e),
+                            'timestamp': datetime.now().isoformat()
+                        }
+                    }
+                    db.insert_activity_with_connection(conn, row, error_data)
+                    continue  # Продолжаем с следующей активностью
+
+            logger.update(f"Все активности завершены для Профиля № {row}")
+            return True
+
     except DatabaseError as e:
         logger.error(f"Database error in process_activity: {e}")
         raise
@@ -514,6 +603,7 @@ def process_random_profile():
     row, wallet = profile
     logger.info(f"Обработка случайного профиля {row}...")
     return row, wallet
+
 
 
 def check_database_content():

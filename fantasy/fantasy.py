@@ -1,7 +1,9 @@
 import random
+import re
 import time
 from pprint import pprint
 from typing import Dict, Any, Optional, Tuple
+from datetime import datetime, timedelta
 
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
@@ -18,6 +20,7 @@ from utils import adjust_window_position, random_number_for_sell
 class Fantasy:
 
     BASE_URL = 'https://monad.fantasy.top/shop'
+    # ADDRESS_URL = 'https://monad.fantasy.top/shop/address'
 
 
     def __init__(self, driver):
@@ -114,7 +117,7 @@ class Fantasy:
             return False
         return False
 
-    def open_website(self) -> bool | None:
+    def _open_website(self) -> bool | None:
         """
         Открывает сайт https://monad.fantasy.top/shop.
         Returns:
@@ -123,7 +126,7 @@ class Fantasy:
         try:
             logger.debug('Opening Fantasy website')
             self.driver.get(self.BASE_URL)
-            time.sleep(3)  # Ждем загрузку страницы)
+            time.sleep(5)  # Ждем загрузку страницы)
 
             tab_tag_name = self.driver.current_url
             logger.debug(f' (open_website), Current tab name: {tab_tag_name}')
@@ -139,216 +142,147 @@ class Fantasy:
             return None
 
     def claim(self):
-        def first_click():
-            time.sleep(3)
-            text = 'Claim'
-            element = SeleniumUtilities.find_button_by_text(self.driver, text)
-            text_element = element.text
-            logger.info(f' (first_click), Element with text: "{text}" has text "{text_element}"')
-            if element:
-                logger.info(f' (first_click), Found element with text "{text}"')
-                if text == text_element:
-                    SeleniumUtilities.click_safely(element)
-                    logger.info(' (first_click), Clicked on the element with text "Claim"')
-                    return True
+        """
+        Пытается выполнить клейм XP.
+        Returns:
+            Dict: Результат выполнения клейма или None в случае ошибки
+        """
+        try:
+            # Находим кнопку Claim
+            claim_button = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//button[contains(text(), 'Claim')]")
+            if not claim_button:
+                logger.error("Failed to find Claim button")
+                return None
+
+            # Получаем текст кнопки
+            button_text = claim_button.text.strip()
+            if button_text != "Claim":
+                # Парсим время ожидания
+                match = re.search(r'Claim in (\d+)h (\d+)m', button_text)
+                if match:
+                    hours, minutes = map(int, match.groups())
+                    next_attempt = datetime.now() + timedelta(hours=hours, minutes=minutes)
+
+                    return {
+                        'activity_type': 'Fantasy_Claim_XP',
+                        'status': 'limit_exceeded',
+                        'wallet_address': '',  # Будет заполнено позже
+                        'next_attempt': next_attempt.strftime('%Y-%m-%d %H:%M:%S'),
+                        'details': {
+                            'message': button_text,
+                            'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                    }
                 else:
-                    logger.warning(f' (first_click), Element with text "{text}" has different text: "{text_element}"')
-                    # Здесь добавить логику для добавления в БД crypto_activities.sqlite3 в activity_type, через какое время и когда Claim будет активен
-                    return True
+                    logger.warning(f"Unexpected button text: {button_text}")
+                    return None
+
+            # Кликаем по кнопке
+            if not SeleniumUtilities.click_safely(claim_button):
+                logger.error("Failed to click Claim button")
+                return None
+
+            # Ждем успешного клейма
+            time.sleep(3)  # Даем время на обработку
+
+            # Проверяем успешность клейма, получаем текст сообщения их модального окна
+            unluck_message = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//div[contains(text(), 'Confirm')]")
+            success_message = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//div[contains(text(), 'Successfully claimed')]")
+            if success_message:
+                now = datetime.now()
+                return {
+                    'activity_type': 'Fantasy_Claim_XP',
+                    'status': 'success',
+                    'wallet_address': '',  # Будет заполнено позже
+                    'next_attempt': (now + timedelta(hours=24, minutes=3)).strftime('%Y-%m-%d %H:%M:%S'),
+                    'details': {
+                        'message': 'Successfully claimed XP',
+                        'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                }
+            elif unluck_message:
+                return {
+                    'activity_type': 'Fantasy_Claim_XP',
+                    'status': 'spin_unluck',
+                    'wallet_address': '',  # Будет заполнено позже
+                    'next_attempt': None,
+                    'details': {
+                        'message': 'Spinned but claim XP unlucky',
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                }
+
             else:
-                logger.warning(f' (first_click), No element with text "{text}" found')
-                return False
+                logger.warning("No success message found after claim")
+                return None
 
-        def retweet_click():
-            #  Если нажимаем на кнопку Claim первый раз то появляется модальное окно, и нужно нажать на кнопку Retweet
-            #  и на странице Х сделать ретвит, затем нажать на кнопку Verify, только потом нажимаем на кнопку Claim
-            current_windows = self.driver.window_handles
-            logger.debug(f' (retweet_click), Current windows: {current_windows}')
-            current_window_fantasy_tab = self.driver.current_window_handle
-            logger.debug(f' (retweet_click), current_window_kuru_tab: {current_window_fantasy_tab}')
+        except Exception as e:
+            logger.error(f"Error in claim: {str(e)}")
+            return None
 
-            time.sleep(3)
-            class_names = 'mt-2 flex gap-x-5'  # ищем элемент с классом "mt-2 flex gap-x-5" в нем 2 кнопки, Retweet и Verify
-            el = SeleniumUtilities.get_element(self.driver, class_names)
+    def fantasy(self):
+        """
+        Обрабатывает активность Fantasy_Claim_XP.
+        Returns:
+            Dict: Результат выполнения активности или None в случае ошибки
+        """
+        try:
+            # Открываем сайт https://monad.fantasy.top/shop
+            if not self._open_website():
+                logger.info(f" (fantasy), Login Fantasy")
+                if not self.login():
+                    logger.error("Failed to login to Fantasy")
+                    return None
 
-            if not el:
-                logger.warning(f' (retweet_click), No element with class name "{class_names}" found')
-                return False
+            # Пытаемся выполнить клейм
+            result = self.claim()
+            if not result:
+                logger.warning("Failed to claim XP in Fantasy")
+                return None
 
-            logger.info(f' (retweet_click), Найден элемент c текстом: {el.text}\n')
-            child_text = 'Retweet'
-            if child_text in el.text:
-                logger.info(f' (retweet_click), Found text: {child_text} in element text: "{el.text}"')
-                if not SeleniumUtilities.find_and_click_child_by_text(el, child_text, partial_match=False):
-                    logger.error(f' (retweet_click), Failed to click on child element with text: {child_text}')
-                    return False
-                else:
-                    logger.info(f' (retweet_click), Clicked on child element with text: {child_text} successfully')
+            # Получаем адрес кошелька
+            selector_xpath_player = "//a[starts-with(@href, '/player/')]"
+            element_player = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, selector_xpath_player)
+            if not element_player:
+                logger.error("Failed to find player element")
+                return None
 
-                    def on_x_page():
-                        time.sleep(2)
-                        new_window_x_tab = SeleniumUtilities.switch_to_new_window(self.driver, current_windows)
-                        if not new_window_x_tab:
-                            logger.error(" (retweet_click, on_x_page), Failed to switch to new_window_x_tab")
-                            return False
-                        logger.debug(f' (retweet_click, on_x_page), On tab X: {new_window_x_tab}')
+            # Получаем адрес кошелька из href
+            wallet_address = element_player.get_attribute("href").split("/")[-1]
+            if not wallet_address:
+                logger.error("Failed to get wallet address from player element")
+                return None
 
-                        time.sleep(2)
-                        # Нажимаем на кнопку <Follow>
-                        # универсальный селектор для поиска кнопки с надписью "Follow" включая "Following".
-                        logger.debug(f' (retweet_click, on_x_page), try to find and click on button "Follow"')
-                        selector = 'button[role="button"][aria-label*="Follow"]'  # ищет любое значение, которое содержит "Follow", включая "Following".
-                        el_btn_follow = SeleniumUtilities.find_element_safely(self.driver, By.CSS_SELECTOR, selector)
-                        if not el_btn_follow:
-                            logger.debug(
-                                f' (retweet_click, on_x_page), Failed to find el_btn_follow "Follow" включая "Following"')
-                        if el_btn_follow.text == 'Follow':
-                            logger.info(
-                                f' (retweet_click, on_x_page), Button "Follow" found successfully, trying to click it.')
-                            if not SeleniumUtilities.click_safely(el_btn_follow):
-                                logger.error(f' (retweet_click, on_x_page), Failed to click on button "Follow"')
-                        else:
-                            logger.info(f' (retweet_click, on_x_page), Found button: {el_btn_follow.text}')
-
-                        max_attempts = 5
-                        attempt = 0
-                        while attempt < max_attempts:
-                            attempt += 1
-                            logger.debug(f' (retweet_click, on_x_page), Attempt №: {attempt}')
-                            self.driver.refresh()
-                            time.sleep(3)
-                            # Нажимаем на кнопку <retweet>
-                            selector_btn_retweet = 'button[data-testid="retweet"][role="button"]'
-                            element_retweet_btn = SeleniumUtilities.find_element_safely(self.driver, By.CSS_SELECTOR,
-                                                                                        selector_btn_retweet)
-                            logger.debug(
-                                f' (retweet_click, on_x_page), try to find and click on button[data-testid="retweet"][role="button"]')
-                            if not element_retweet_btn:
-                                logger.error(" (retweet_click, on_x_page), Failed to find element_retweet_btn")
-                            logger.info(' (retweet_click, on_x_page), Find element_retweet_btn successfully')
-                            if not SeleniumUtilities.click_safely(element_retweet_btn):
-                                logger.error(" (retweet_click, on_x_page), Failed to click on element_retweet_btn")
-                                continue  # переходит сразу к следующему кругу цикла.
-                            logger.info(' (retweet_click, on_x_page), Clicked on element_retweet_btn successfully')
-                            break  # выход из цикла
-
-                        max_attempts = 5
-                        attempt = 0
-                        while attempt < max_attempts:
-                            attempt += 1
-                            logger.debug(f' (retweetConfirm, on_x_page), Attempt №: {attempt}')
-                            self.driver.refresh()
-                            time.sleep(3)
-                            # Нажимаем на кнопку <Repost>
-                            selector_btn_confirm = 'div[data-testid="retweetConfirm"]'
-                            element_retweet_btn_confirm = SeleniumUtilities.find_element_safely(self.driver,
-                                                                                                By.CSS_SELECTOR,
-                                                                                                selector_btn_confirm)
-                            logger.debug(
-                                f' (retweet_click, on_x_page), try to find and click on div[data-testid="retweetConfirm"][role="menuitem"]')
-                            if not element_retweet_btn_confirm:
-                                logger.error(
-                                    " (retweet_click, on_x_page), Failed to find <Repost> element_retweet_btn_confirm")
-                                continue  # переходит сразу к следующему кругу цикла.
-                            logger.info(
-                                ' (retweet_click, on_x_page), Find <Repost> element_retweet_btn_confirm successfully')
-                            if not SeleniumUtilities.click_safely(element_retweet_btn_confirm):
-                                logger.error(" (retweet_click, on_x_page), Failed to click on btn <Repost>")
-                                continue  # переходит сразу к следующему кругу цикла.
-                            logger.info(' (retweet_click, on_x_page), Clicked on btn <Repost> successfully')
-                            break  # выход из цикла
-
-                        time.sleep(3)
-                        self.driver.close()
-                        logger.info(' (retweet_click, on_x_page), Closed current tab "X" successfully')
-                        self.driver.switch_to.window(current_window_fantasy_tab)
-                        current_window = self.driver.current_window_handle
-                        if not current_window == current_window_fantasy_tab:
-                            logger.error(' (retweet_click, on_x_page), Failed to switch to Fantasy tab')
-                            return False
-                        logger.info(' (retweet_click, on_x_page), Switched to Fantasy tab successfully')
-                        time.sleep(1)
-                        return True
-
-                    if not on_x_page():
-                        logger.info(' on_x_page), Failed to perform on_x_page actions')
-
-            time.sleep(2)
-            # Нажимаем на кнопку <Verify>
-            child_text = 'Verify'
-            if child_text in el.text:
-                logger.info(f' (retweet_click), Found text {child_text} in element text: "{el.text}"')
-                if not SeleniumUtilities.find_and_click_child_by_text(el, child_text):
-                    logger.error(f' (retweet_click), Failed to click on child element with text: {child_text}')
-                    return False
-                else:
-                    logger.info(f' (retweet_click), Clicked on child element with text: {child_text} successfully')
-
-            time.sleep(3)
-            # Нажимаем на кнопку <Claim>
-            logger.debug(f' (retweet_click), try to find and click on button "Claim"')
-            child_text = 'Claim'
-            # универсальный селектор для поиска кнопки с надписью "Claim" включая "Claim now", "Claim reward" и т.д.
-            selector_xpath = f'//button[contains(text(), "{child_text}")]'  # находит <button>, который содержит слово "Claim" в любом месте текста
-            el_btn_claim = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, selector_xpath)
-            if not el_btn_claim:
-                logger.debug(f' (retweet_click), Failed to find el_btn_claim "Claim"')
-            if el_btn_claim.text == 'Claim':
-                logger.info(f' (retweet_click), Button: {el_btn_claim.text} found successfully, trying to click it.')
-                if not SeleniumUtilities.click_safely(el_btn_claim):
-                    logger.error(
-                        f' (retweet_click), Failed to click on button: {el_btn_claim.text} пробуем кликнуть на кнопку с помощью ActionChains')
-
-                    # Создаем объект ActionChains
-                    actions = ActionChains(self.driver)
-                    # Наводим курсор на кнопку и кликаем
-                    actions.move_to_element(el_btn_claim).click().perform()
-                    logger.info(
-                        f' (retweet_click), Clicked on button: {el_btn_claim.text} successfully через ActionChains')
-                    return True
-
-                logger.info(f' (retweet_click), Clicked on button: {el_btn_claim.text} successfully')
-                return True
+            # Обновляем результат с адресом кошелька
+            if isinstance(result, dict):
+                result.update({
+                    'wallet_address': wallet_address,
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                })
             else:
-                logger.info(f' (retweet_click),  Found button: {el_btn_claim.text} not "Claim"')
+                result = {
+                    'activity_type': 'Fantasy_Claim_XP',
+                    'status': 'error',
+                    'wallet_address': wallet_address,
+                    'next_attempt': None,
+                    'details': {
+                        'error': 'Invalid result format',
+                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    }
+                }
 
-        if first_click():
-            logger.info(' (claim), Successfully clicked on the element with text "Claim"')
+            logger.info(f"Successfully processed Fantasy activity: {result}")
+            return result
 
-
-        if retweet_click():
-            first_click()
-
-        tab_tag_name = self.driver.current_url
-        logger.debug(f' (claim), Current tab name: {tab_tag_name}')
-        if tab_tag_name == 'https://monad.fantasy.top/shop':
-            logger.info(f' (claim), 1 Ждем результат спина и выигрыш')
-            return True
-        return None
-
-        # Здесь добавить логику для добавления в БД crypto_activities.sqlite3 в activity_type, через какое время и когда Claim будет активен
-
-
-
-
-
-
-
-def fantasy(driver) -> None:
-    try:
-        # Создаем экземпляр класса для работы с monad.fantasy.top
-        fantasy = Fantasy(driver)
-
-        # Открываем сайт https://monad.fantasy.top/shop
-        if not fantasy.open_website():
-            logger.info(f" (kuru), Login Fantasy")
-            fantasy.login()
-
-
-        if not fantasy.claim():
-            logger.info(f" (fantasy), Failed to claim or Continue")
-        logger.debug(f" (fantasy), Claimed successfully")
-
-
-    except Exception as e:
-        logger.error(f'Error in fantasy script: {str(e)}')
+        except Exception as e:
+            logger.error(f"Error in fantasy activity: {str(e)}")
+            return {
+                'activity_type': 'Fantasy_Claim_XP',
+                'status': 'error',
+                'wallet_address': '',  # Не удалось получить адрес
+                'next_attempt': None,
+                'details': {
+                    'error': str(e),
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                }
+            }

@@ -147,6 +147,11 @@ AUTO_PROCESS_UNEXPECTED_STATUS = config.auto_process_unexpected_status
 SUCCESS_WAIT_TIME = config.success_wait_time
 MAX_RECORDS_PER_PROFILE = config.max_records_per_profile
 
+# Получаем значение из конфигурации и преобразуем в список
+# logger.debug(f"Activity settings from config: {config.activity_settings}")
+DEFAULT_ACTIVITIES = [activity.strip() for activity in config.activity_settings.get("DEFAULT_ACTIVITIES", "").split(",") if activity.strip()]
+logger.debug(f"Processed DEFAULT_ACTIVITIES: {DEFAULT_ACTIVITIES}")
+
 # Настройки обработки активностей Kuru
 MIN_PERCENT_MON = config.kuru_activity_settings.get("MIN_PERCENT_MON")
 MAX_PERCENT_MON = config.kuru_activity_settings.get("MAX_PERCENT_MON")
