@@ -168,7 +168,8 @@ class SQLiteDatabase:
             raise DatabaseError(f"Failed to check data integrity: {e}")
 
     def should_process_activity_with_connection(self, conn, row: int, wallet_address: str,
-                                                activity_types: Optional[List[str]], default_activities: Optional[List[str]]) -> Tuple[bool, str, str]:
+                                                activity_types: Optional[List[str]], default_activities: Optional[List[str]]) -> \
+    tuple[bool, Any, str] | tuple[bool, list[Any]]:
         """
         Проверяет, нужно ли выполнять активность для профиля, используя существующее соединение.
 
@@ -180,6 +181,7 @@ class SQLiteDatabase:
         - `Tuple[bool, str]`: флаг выполнения и причина.
         """
         global activity
+        activity_type_carry_out_list = []
         try:
             if not activity_types:
                 activity_types = default_activities
@@ -253,13 +255,13 @@ class SQLiteDatabase:
                 if activity['wallet_address'] != wallet_address:
                     logger.warning(f"Несоответствие кошелька для Профиля № {row}: БД({activity['wallet_address']}), "
                                    f"Текущий({wallet_address} для активности {activity['activity_type']})")
-                    return True, activity['activity_type'], (f"Wallet address changed for: {activity['activity_type']} "
-                                                             f"at {activity['timestamp']}, but activity will be carried out")
+                    activity_type_carry_out_list.append(activity['activity_type'])
 
                 for activity_type in activity_types:
                     if activity_type not in activity['activity_type']:
-                        return True, activity_type, (f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']}"
-                                                                 f"{activity['activity_type']}, activity will be carried out")
+                        logger.debug(f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']},"
+                                     f" activity will be carried out")
+                        activity_type_carry_out_list.append(activity_type)
 
             current_time = datetime.now()
 
@@ -272,40 +274,49 @@ class SQLiteDatabase:
                         next_allowed_time = last_success_time + timedelta(hours=24, minutes=3)
 
                         if current_time >= next_allowed_time:
-                            return True, activity['activity_type'],  f"Waiting time passed since last success, {activity['activity_type']} activity will be carried out"
-                        return False, activity['activity_type'],  f"Waiting until {next_allowed_time.strftime('%Y-%m-%d %H:%M:%S')}"
+                            logger.debug(f"Waiting time passed since last success, {activity['activity_type']} activity will be carried out")
+                            activity_type_carry_out_list.append(activity['activity_type'])
+                        logger.debug(f"Waiting until {next_allowed_time.strftime('%Y-%m-%d %H:%M:%S')}")
+                        activity_type_carry_out_list.append(activity['activity_type'])
+
 
                     except ValueError as e:
-                        logger.error(f"Error parsing timestamp for activity {activity['activity_type']}: {e}")
-                        return True, activity['activity_type'], f"Invalid timestamp format, {activity['activity_type']} activity will be carried out"
+                        logger.error(f"Invalid timestamp format, {activity['activity_type']} activity will be carried out")
+                        activity_type_carry_out_list.append(activity['activity_type'])
+
 
                 elif activity['status'] == 'limit_exceeded':
                     try:
                         if activity['next_attempt']:
                             next_attempt = datetime.strptime(activity['next_attempt'], '%Y-%m-%d %H:%M:%S')
                             if current_time >= next_attempt:
-                                return True, activity['activity_type'], f"Next attempt time reached, {activity['activity_type']} activity will be carried out"
-                            return False, activity['activity_type'], f"Waiting until next attempt: {next_attempt.strftime('%Y-%m-%d %H:%M:%S')}"
+                                logger.debug(f"Next attempt time reached, {activity['activity_type']} activity will be carried out")
+                                activity_type_carry_out_list.append(activity['activity_type'])
+
+                            logger.debug(f"Waiting until next attempt: {next_attempt.strftime('%Y-%m-%d %H:%M:%S')}")
                         else:
-                            logger.warning(f"No next_attempt time for limit_exceeded status in {activity['activity_type']}")
-                            return True, activity['activity_type'], f"No next attempt time set, {activity['activity_type']} activity will be carried out"
+                            logger.warning(f"No next_attempt time for limit_exceeded status in {activity['activity_type']}, activity will be carried out")
+                            activity_type_carry_out_list.append(activity['activity_type'])
 
                     except ValueError as e:
-                        logger.error(f"Error parsing next_attempt time for activity {activity['activity_type']}: {e}")
-                        return True, activity['activity_type'], f"Invalid next_attempt time format, {activity['activity_type']} activity will be carried out"
+                        logger.error(f" Invalid next_attempt time format, {activity['activity_type']} activity will be carried out")
+                        activity_type_carry_out_list.append(activity['activity_type'])
+
 
                 elif activity['status'] == 'error' or activity['status'] not in ['success', 'limit_exceeded']:
                     logger.warning(f"Неожиданный статус для Профиля № {row}: {activity['status']}")
                     if hasattr(config, 'activity_settings') and config.activity_settings.get(
                             'AUTO_PROCESS_UNEXPECTED_STATUS', True):
-                        return True, activity['activity_type'], f"Unexpected status: {activity['status']}, {activity['activity_type']} activity will be carried out"
-                    return False, activity['activity_type'], f"Unexpected status: {activity['status']} (auto-processing disabled)"
+                        logger.debug(f"Unexpected status: {activity['status']}, {activity['activity_type']} activity will be carried out")
+                        activity_type_carry_out_list.append(activity['activity_type'])
 
-            return True, activity['activity_type'], "No previous activities found, activity will be carried out"
+                    logger.debug(f"Unexpected status: {activity['status']} (auto-processing disabled)")
+
+            return True, activity_type_carry_out_list
 
         except Exception as e:
             logger.error(f"Ошибка базы данных в should_process_activity_with_connection: {e}")
-            return True, activity['activity_type'], f"Database error: {e}"
+            return True, activity_type_carry_out_list
 
     def insert_activity_with_connection(self, conn, row: int, activity_data: Dict[str, Any]):
         """Вставляет активность с указанием номера строки используя существующее соединение"""
@@ -488,15 +499,15 @@ class SQLiteDatabase:
                     row, wallet_address = profile['profile_number'], profile['wallet_address']
 
                     # Используем существующую логику проверки
-                    should_process, activity_types, reason = self.should_process_activity_with_connection(
+                    should_process, activity_type_carry_out_list = self.should_process_activity_with_connection(
                         conn, row, wallet_address, activity_types, DEFAULT_ACTIVITIES
                     )
 
                     if should_process:
                         eligible_profiles.append((row, wallet_address))
-                        logger.debug(f"Профиль {row} подходит для обработки:{activity_types}, причина: {reason}")
+                        logger.debug(f"Профиль {row} подходит для обработки:{activity_type_carry_out_list}")
                     else:
-                        logger.debug(f"Профиль {row} не подходит: {activity_types}, причина: {reason}")
+                        logger.debug(f"Профиль {row} не подходит: {activity_type_carry_out_list}")
 
                 if not eligible_profiles:
                     logger.info("Нет профилей, готовых к обработке")
@@ -525,47 +536,42 @@ def process_activity(driver, wallet_mm_from_browser_extension, row, activity_typ
             if not db.check_data_integrity_with_connection(conn):
                 logger.warning("Data integrity check failed, attempting to continue")
 
+            # activity_type_carry_out_list = []
+
             # Проверяем, нужно ли выполнять активность
-            should_process, activity_type_carry_out, reason = db.should_process_activity_with_connection(conn, row, wallet_mm_from_browser_extension, activity_types, DEFAULT_ACTIVITIES)
+            should_process, activity_type_carry_out_list = db.should_process_activity_with_connection(conn, row, wallet_mm_from_browser_extension, activity_types, DEFAULT_ACTIVITIES)
             logger.debug(f"Проверка необходимости обработки: should_process={should_process}, "
-                         f"activity_type_carry_out={activity_type_carry_out}, reason={reason}")
+                         f"activity_type_carry_out={activity_type_carry_out_list}")
 
             if not should_process:
-                logger.update(f"Пропуск активности для Профиль № {row}. Причина: {reason}")
+                logger.update(f"Пропуск активности для Профиль № {row}.")
                 return False
 
-            # Если статус неожиданный, проверяем настройки
-            if "Unexpected status" in reason:
-                if not config.activity_settings['AUTO_PROCESS_UNEXPECTED_STATUS']:
-                    logger.warning(f"Unexpected status for Профиль № {row}. Reason: {reason}")
-                    user_choice = input("Do you want to process this activity? (y/n): ").lower()
-                    if user_choice != 'y':
-                        logger.info("Activity skipped by user")
-                        return
 
             # Обрабатываем каждую активность из списка или из DEFAULT_ACTIVITIES
             for activity_type in activity_types or DEFAULT_ACTIVITIES:
                 try:
-                    if activity_type_carry_out == activity_type:
-                        logger.debug(f"Активность {activity_type} для Профиля № {row}")
+                    for activity_type_carry_out in activity_type_carry_out_list:
+                        if activity_type_carry_out == activity_type:
+                            logger.debug(f"Активность {activity_type} для Профиля № {row}")
 
-                        if activity_type == 'Monad_Faucet_Portal':
-                            logger.debug(f"Активность {activity_type}. Вызов MonadFaucet.process для Профиля № {row}")
-                            result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
-                        if activity_type == 'Fantasy_Claim_XP':
-                            logger.debug(f"Активность {activity_type}. Вызов Fantasy.fantasy для Профиля № {row}")
-                            fantasy_instance = Fantasy(driver)
-                            result = fantasy_instance.fantasy()
+                            if activity_type == 'Monad_Faucet_Portal':
+                                logger.debug(f"Активность {activity_type}. Вызов MonadFaucet.process для Профиля № {row}")
+                                result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
+                            if activity_type == 'Fantasy_Claim_XP':
+                                logger.debug(f"Активность {activity_type}. Вызов Fantasy.fantasy для Профиля № {row}")
+                                fantasy_instance = Fantasy(driver)
+                                result = fantasy_instance.fantasy()
 
-                        # Сохраняем результат
-                        logger.debug(f"Начало сохранения результата активности {activity_type} в БД для Профиля № {row}")
-                        if result:
-                            logger.debug(f"Результат выполнения активности {activity_type} для Профиля № {row}: {result}")
                             # Сохраняем результат
-                            db.insert_activity_with_connection(conn, row, result)
-                            logger.debug(f"Результат активности {activity_type} успешно сохранен в БД для Профиля № {row}")
-                        else:
-                            logger.warning(f"Активность {activity_type} не вернула результат для Профиля № {row}")
+                            logger.debug(f"Начало сохранения результата активности {activity_type} в БД для Профиля № {row}")
+                            if result:
+                                logger.debug(f"Результат выполнения активности {activity_type} для Профиля № {row}: {result}")
+                                # Сохраняем результат
+                                db.insert_activity_with_connection(conn, row, result)
+                                logger.debug(f"Результат активности {activity_type} успешно сохранен в БД для Профиля № {row}\n")
+                            else:
+                                logger.warning(f"Активность {activity_type} не вернула результат для Профиля № {row}")
 
                 except Exception as e:
                     logger.error(f"Error processing активности {activity_type} for Профиль № {row}: {e}")
