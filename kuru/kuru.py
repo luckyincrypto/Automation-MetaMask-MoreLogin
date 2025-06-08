@@ -276,7 +276,6 @@ class KuruSwap:
             text_button = 'Swap'
             element_btn = SeleniumUtilities.find_button_by_text(self.driver, text_button)
             if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
-                logger.debug(f'element_btn and element_btn.is_enabled() and element_btn.is_displayed(): OK')
                 if not SeleniumUtilities.click_safely(element_btn):
                     logger.error(" (swap), Failed to click button <Swap>")
                     if not SeleniumUtilities.click_safely(refresh_element):

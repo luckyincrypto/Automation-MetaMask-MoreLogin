@@ -421,7 +421,7 @@ async def operationEnv(
 
             time.sleep(5)
             # Активность на сайте: https://www.kuru.io/
-            # kuru(driver, mm_address)
+            kuru(driver, mm_address)
 
             time.sleep(5)
             # Активность на сайте: https://monad.fantasy.top/shop

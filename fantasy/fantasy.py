@@ -183,7 +183,7 @@ class Fantasy:
                 return None
 
             # Ждем успешного клейма
-            time.sleep(3)  # Даем время на обработку
+            time.sleep(15)  # Даем время на обработку
 
             # Проверяем успешность клейма, получаем текст сообщения их модального окна
             unluck_message = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//div[contains(text(), 'Confirm')]")
