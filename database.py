@@ -551,13 +551,14 @@ def process_activity(driver, wallet_mm_from_browser_extension, row, activity_typ
             # Обрабатываем каждую активность из списка или из DEFAULT_ACTIVITIES
             for activity_type in activity_types or DEFAULT_ACTIVITIES:
                 try:
-                    for activity_type_carry_out in activity_type_carry_out_list:
+                    for activity_type_carry_out in list(set(activity_type_carry_out_list)):
                         if activity_type_carry_out == activity_type:
                             logger.debug(f"Активность {activity_type} для Профиля № {row}")
 
                             if activity_type == 'Monad_Faucet_Portal':
                                 logger.debug(f"Активность {activity_type}. Вызов MonadFaucet.process для Профиля № {row}")
                                 result = MonadFaucet.process(driver, wallet_mm_from_browser_extension)
+
                             if activity_type == 'Fantasy_Claim_XP':
                                 logger.debug(f"Активность {activity_type}. Вызов Fantasy.fantasy для Профиля № {row}")
                                 fantasy_instance = Fantasy(driver)

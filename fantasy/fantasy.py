@@ -147,78 +147,89 @@ class Fantasy:
         Returns:
             Dict: Результат выполнения клейма или None в случае ошибки
         """
-        try:
-            # Находим кнопку Claim
-            claim_button = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//button[contains(text(), 'Claim')]")
-            if not claim_button:
-                logger.error("Failed to find Claim button")
-                return None
 
-            # Получаем текст кнопки
-            button_text = claim_button.text.strip()
-            if button_text != "Claim":
-                # Парсим время ожидания
-                match = re.search(r'Claim in (\d+)h (\d+)m', button_text)
-                if match:
-                    hours, minutes = map(int, match.groups())
-                    next_attempt = datetime.now() + timedelta(hours=hours, minutes=minutes)
+        while True:
+            try:
 
+                # Находим кнопку Claim
+                claim_button = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//button[contains(text(), 'Claim')]")
+                if not claim_button:
+                    logger.error("Failed to find Claim button")
+                    # return None
+
+                # Получаем текст кнопки
+                button_text = claim_button.text.strip()
+                if button_text != "Claim":
+                    # Парсим время ожидания
+                    match = re.search(r'Claim in (\d+)h (\d+)m', button_text)
+                    if match:
+                        hours, minutes = map(int, match.groups())
+                        next_attempt = datetime.now() + timedelta(hours=hours, minutes=minutes)
+
+                        return {
+                            'activity_type': 'Fantasy_Claim_XP',
+                            'status': 'limit_exceeded',
+                            'wallet_address': '',  # Будет заполнено позже
+                            'next_attempt': next_attempt.strftime('%Y-%m-%d %H:%M:%S'),
+                            'details': {
+                                'message': button_text,
+                                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            }
+                        }
+                    else:
+                        logger.warning(f"Unexpected button text: {button_text}")
+                        return None
+
+                # Кликаем по кнопке
+                if not SeleniumUtilities.click_safely(claim_button):
+                    logger.error("Failed to click Claim button")
+                    # return None
+
+                # Ждем успешного клейма
+                time.sleep(15)  # Даем время на обработку
+
+                # Проверяем успешность клейма, получаем текст сообщения из модального окна
+                message = SeleniumUtilities.find_element_safely(
+                    self.driver, By.XPATH, "//button[contains(text(), 'Confirm')]", timeout=15)
+                success_message = SeleniumUtilities.find_element_safely(
+                    self.driver, By.XPATH, "//button[contains(text(), 'Successfully claimed')]", timeout=15)
+                now = datetime.now()
+                if success_message:
+                    if not SeleniumUtilities.click_safely(message):
+                        logger.debug(f'Click on btn Successfully claimed failed')
                     return {
                         'activity_type': 'Fantasy_Claim_XP',
-                        'status': 'limit_exceeded',
+                        'status': 'success',
                         'wallet_address': '',  # Будет заполнено позже
-                        'next_attempt': next_attempt.strftime('%Y-%m-%d %H:%M:%S'),
+                        'next_attempt': (now + timedelta(hours=24, minutes=3)).strftime('%Y-%m-%d %H:%M:%S'),
                         'details': {
-                            'message': button_text,
+                            'message': 'Successfully claimed XP',
+                            'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
+                        }
+                    }
+                elif message:
+                    if not SeleniumUtilities.click_safely(message):
+                        logger.debug(f'Click on btn Confirm failed')
+                    return {
+                        'activity_type': 'Fantasy_Claim_XP',
+                        'status': 'success_spinned',
+                        'wallet_address': '',  # Будет заполнено позже
+                        'next_attempt': (now + timedelta(hours=24, minutes=3)).strftime('%Y-%m-%d %H:%M:%S'),
+                        'details': {
+                            'message': 'Successfully spinned for claimed XP',
                             'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         }
                     }
+
                 else:
-                    logger.warning(f"Unexpected button text: {button_text}")
-                    return None
+                    logger.warning("No success message found after claim")
 
-            # Кликаем по кнопке
-            if not SeleniumUtilities.click_safely(claim_button):
-                logger.error("Failed to click Claim button")
+
+            except Exception as e:
+                logger.error(f"Error in claim: {str(e)}")
                 return None
+            var = self.driver.refresh
 
-            # Ждем успешного клейма
-            time.sleep(15)  # Даем время на обработку
-
-            # Проверяем успешность клейма, получаем текст сообщения их модального окна
-            unluck_message = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//div[contains(text(), 'Confirm')]")
-            success_message = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, "//div[contains(text(), 'Successfully claimed')]")
-            if success_message:
-                now = datetime.now()
-                return {
-                    'activity_type': 'Fantasy_Claim_XP',
-                    'status': 'success',
-                    'wallet_address': '',  # Будет заполнено позже
-                    'next_attempt': (now + timedelta(hours=24, minutes=3)).strftime('%Y-%m-%d %H:%M:%S'),
-                    'details': {
-                        'message': 'Successfully claimed XP',
-                        'timestamp': now.strftime('%Y-%m-%d %H:%M:%S')
-                    }
-                }
-            elif unluck_message:
-                return {
-                    'activity_type': 'Fantasy_Claim_XP',
-                    'status': 'spin_unluck',
-                    'wallet_address': '',  # Будет заполнено позже
-                    'next_attempt': None,
-                    'details': {
-                        'message': 'Spinned but claim XP unlucky',
-                        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    }
-                }
-
-            else:
-                logger.warning("No success message found after claim")
-                return None
-
-        except Exception as e:
-            logger.error(f"Error in claim: {str(e)}")
-            return None
 
     def fantasy(self):
         """

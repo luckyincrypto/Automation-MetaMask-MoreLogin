@@ -421,6 +421,7 @@ async def operationEnv(
 
             time.sleep(5)
             # Активность на сайте: https://www.kuru.io/
+            driver.switch_to.new_window()
             kuru(driver, mm_address)
 
             time.sleep(5)
