@@ -614,6 +614,7 @@ class MetaMaskHelper(SeleniumUtilities):
             if element and SeleniumUtilities.click_safely(element):
                 logger.debug(f' (_click_element), Клик по кнопке успешен')
                 return True
+            logger.error(f' (_click_element), Клик по кнопке НЕ успешен')
             return False
 
         def _click_button_by_text(self, text):
@@ -635,12 +636,23 @@ class MetaMaskHelper(SeleniumUtilities):
 
 
         def try_to_find_monad_testnet(self, target_network):
-            xpath_selector = "//div[contains(@class, 'multichain-network-list-menu')]//div[contains(@class, 'mm-box') and contains(@class, 'characters')]"
-            main_block = SeleniumUtilities.find_element_safely(self.driver, By.XPATH, xpath_selector)
+
+            class_selector_show_test_networks  = "toggle-button toggle-button--off"
+            el_show_test_networks = SeleniumUtilities.get_element(self.driver, class_selector_show_test_networks)
+            if el_show_test_networks:
+                logger.debug(f' (try_to_find_monad_testnet), Кнопка показа тестовых сетей найдена')
+                if SeleniumUtilities.click_safely(el_show_test_networks):
+                    logger.debug(f' (try_to_find_monad_testnet), Кнопка показа тестовых сетей нажата')
+
+            else:
+                logger.warning(f' (ensure_monad_testnet_active), Кнопка показа тестовых сетей НЕ найдена')
+
+            class_list_test_networks_block = "mm-box multichain-network-list-menu"
+            main_block = SeleniumUtilities.get_elements(self.driver, class_list_test_networks_block)
 
             if main_block:
                 logger.debug(f' (ensure_monad_testnet_active), main_block получен: {main_block}')
-                res_info = SeleniumUtilities.parse_interactive_elements(main_block)
+                res_info = SeleniumUtilities.parse_interactive_elements(main_block[0])
                 # pprint(res_info)
                 el_res = res_info['elements_info']
                 for el in el_res:

@@ -33,7 +33,6 @@ toket_address_list = [
 '0x743cef7ccc8ac56605c8404607142e5b35efa11d',
 '0x268e4e24e0051ec27b3d27a95977e71ce6875a05',
 '0x4c10428ed0410dfb2de62fc007f7c1105ae861e9',
-'0x2fa2c507289be90ca50a8802f8d436d43001b521',
 '0x2bb4219b8e85c111613f3ee192a115676f230d35',
 '0x8507f576eb214d172012065d58cfb38a4540b0a6',
 '0x859fb36f3fe7e22b37dd99b501f891377ddc9c33',
@@ -244,67 +243,68 @@ class KuruSwap:
                 'element_refresh': WebElement  # Элемент для обновления котировки
             }
         """
-        try:
-            var = self.driver.refresh
-            print(f'var: {var}')
-            time.sleep(3)
-            token_exist = {'selling_token': {}, 'buying_token': {}}
+        while True:
+            try:
 
-            # Получаем символы токенов
-            els_symbol_list = SeleniumUtilities.get_elements(
-                self.driver,
-                self.TOKEN_SELECTORS['symbol']
-            )
-            logger.debug(f' (get_token_info), Found token symbols: {els_symbol_list[0].text.strip()}, and: {els_symbol_list[1].text.strip()}')
+                time.sleep(3)
+                token_exist = {'selling_token': {}, 'buying_token': {}}
 
-            selling_symbol = token_exist['selling_token']['symbol'] = els_symbol_list[0].text.strip()
-            buying_symbol = token_exist['buying_token']['symbol'] = els_symbol_list[1].text.strip()
+                # Получаем символы токенов
+                els_symbol_list = SeleniumUtilities.get_elements(
+                    self.driver,
+                    self.TOKEN_SELECTORS['symbol']
+                )
+                logger.debug(f' (get_token_info), Found token symbols: {els_symbol_list[0].text.strip()}, and: {els_symbol_list[1].text.strip()}')
 
-            # Получаем балансы токенов и элемент обновления
-            els_info_list = []
-            el_text = SeleniumUtilities.get_elements(self.driver, self.TOKEN_SELECTORS['balance'])
-            for index, el in enumerate(el_text):
-                if el.text.strip():
-                    if 'Refresh quote' in el.text.strip():
-                        els_list = SeleniumUtilities.parse_interactive_elements(el)
-                        for el_refresh_quote in els_list['elements_info']:
-                            if 'Refresh quote' == el_refresh_quote['text'] and el_refresh_quote['classes'] == 'text-sm font-medium':
-                                token_exist['element_refresh'] = el_refresh_quote['element']
-                    try:
-                        number = float(el.text.split()[0])
-                        els_info_list.append(number)
-                    except Exception:
-                        pass
+                selling_symbol = token_exist['selling_token']['symbol'] = els_symbol_list[0].text.strip()
+                buying_symbol = token_exist['buying_token']['symbol'] = els_symbol_list[1].text.strip()
 
-            # Обработка баланса selling token
-            logger.debug(f" (get_token_info), els_info_list: {els_info_list}")
+                # Получаем балансы токенов и элемент обновления
+                els_info_list = []
+                el_text = SeleniumUtilities.get_elements(self.driver, self.TOKEN_SELECTORS['balance'])
+                for index, el in enumerate(el_text):
+                    if el.text.strip():
+                        if 'Refresh quote' in el.text.strip():
+                            els_list = SeleniumUtilities.parse_interactive_elements(el)
+                            for el_refresh_quote in els_list['elements_info']:
+                                if 'Refresh quote' == el_refresh_quote['text'] and el_refresh_quote['classes'] == 'text-sm font-medium':
+                                    token_exist['element_refresh'] = el_refresh_quote['element']
+                        try:
+                            number = float(el.text.split()[0])
+                            els_info_list.append(number)
+                        except Exception:
+                            pass
 
-            # Проверка наличия токенов
-            number_tokens_selling = float(els_info_list[0]) if els_info_list[0] not in [None, 0, '0'] else 0.0
-            token_exist.setdefault('selling_token', {})['number_tokens'] = number_tokens_selling
+                # Обработка баланса selling token
+                logger.debug(f" (get_token_info), els_info_list: {els_info_list}")
 
-            if number_tokens_selling == 0.0:
-                logger.debug(f" (get_token_info), Токенов {selling_symbol} в кошельке нет")
-            else:
-                logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
+                # Проверка наличия токенов
+                number_tokens_selling = float(els_info_list[0]) if els_info_list[0] not in [None, 0, '0'] else 0.0
+                token_exist.setdefault('selling_token', {})['number_tokens'] = number_tokens_selling
 
-            # Обработка баланса buying token. Проверяем наличие данных и корректно преобразуем в float
-            number_tokens_buying = float(els_info_list[1]) if els_info_list[1] not in [None, 0, '0'] else 0.0
+                if number_tokens_selling == 0.0:
+                    logger.debug(f" (get_token_info), Токенов {selling_symbol} в кошельке нет")
+                else:
+                    logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
 
-            # Безопасное присваивание в `token_exist`
-            token_exist.setdefault('buying_token', {})['number_tokens'] = number_tokens_buying
+                # Обработка баланса buying token. Проверяем наличие данных и корректно преобразуем в float
+                number_tokens_buying = float(els_info_list[1]) if els_info_list[1] not in [None, 0, '0'] else 0.0
 
-            # Логирование результата
-            if number_tokens_buying == 0.0:
-                logger.debug(f" (get_token_info), Токенов {buying_symbol} в кошельке нет")
-            else:
-                logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
+                # Безопасное присваивание в `token_exist`
+                token_exist.setdefault('buying_token', {})['number_tokens'] = number_tokens_buying
 
-            return token_exist
+                # Логирование результата
+                if number_tokens_buying == 0.0:
+                    logger.debug(f" (get_token_info), Токенов {buying_symbol} в кошельке нет")
+                else:
+                    logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
 
-        except Exception as e:
-            logger.error(f' (get_token_info), Error getting token info: {str(e)}')
-            return {'selling_token': {}, 'buying_token': {}}
+                return token_exist
+
+            except Exception as e:
+                logger.error(f' (get_token_info), Error getting token info: {str(e)}')
+                continue
+                # return {'selling_token': {}, 'buying_token': {}}
 
     def input_number_for_sell(self, number):
         css_selector_selling = '.app-container div.space-y-2 input'

@@ -237,31 +237,24 @@ class SQLiteDatabase:
                 for count in activity_counts:
                     logger.debug(f"Type: {count['activity_type']}, Count: {count['count']}, Last: {count['last_timestamp']}")
 
-                # Если есть записи, но не для запрошенных типов
-                # if activity_counts:
-                #     logger.warning(f"Профиль № {row} имеет записи, но не для запрошенных типов активностей")
-                #     return True, "Profile has records but not for requested activity types"
-                # else:
-                #     logger.warning(f"Профиль № {row} отсутствует в базе данных '{self.db_path}'")
-                #     return True, activity['activity_type'], "Profile not found in Data Base"
 
             # Преобразуем записи в удобный формат
             parsed_activities = [self._parse_activity_record(activity) for activity in last_activities]
             logger.debug(f"Parsed activities for profile {row}: {parsed_activities}")
 
 
-            for activity in parsed_activities:
-                # Проверяем кошелек
-                if activity['wallet_address'] != wallet_address:
-                    logger.warning(f"Несоответствие кошелька для Профиля № {row}: БД({activity['wallet_address']}), "
-                                   f"Текущий({wallet_address} для активности {activity['activity_type']})")
-                    activity_type_carry_out_list.append(activity['activity_type'])
-
-                for activity_type in activity_types:
-                    if activity_type not in activity['activity_type']:
-                        logger.debug(f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']},"
-                                     f" activity will be carried out")
-                        activity_type_carry_out_list.append(activity_type)
+            # for activity in parsed_activities:
+            #     # Проверяем кошелек
+            #     if activity['wallet_address'] != wallet_address:
+            #         logger.warning(f"Несоответствие кошелька для Профиля № {row}: БД({activity['wallet_address']}), "
+            #                        f"Текущий({wallet_address} для активности {activity['activity_type']})")
+            #         activity_type_carry_out_list.append(activity['activity_type'])
+            #
+            #     for activity_type in activity_types:
+            #         if activity_type not in activity['activity_type']:
+            #             logger.debug(f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']},"
+            #                          f" activity will be carried out")
+            #             activity_type_carry_out_list.append(activity_type)
 
             current_time = datetime.now()
 
