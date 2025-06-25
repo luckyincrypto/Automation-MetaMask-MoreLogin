@@ -27,7 +27,7 @@ toket_address_list = [
 '0xe0590015a873bf326bd645c3e1266d4db41c4e6b',
 '0x0f0bdebf0f83cd1ee3974779bcb7315f9808c714',
 '0xb5a30b0fdc5ea94a52fdc42e3e9760cb8449fb37',
-'0xcf5a6076cfa32686c0df13abada2b40dec133f1d',
+# '0xcf5a6076cfa32686c0df13abada2b40dec133f1d',  # WBTC
 '0xabd7afa2161eb7254c0a9dbb5fe79216b7c28e03',
 '0x39e95286dd43f8da34cbda8e4b656da9f53ca644',
 '0x743cef7ccc8ac56605c8404607142e5b35efa11d',
@@ -84,23 +84,6 @@ class KuruSwap:
         self.driver = driver
         self.metamask = MetaMaskHelper(driver)
 
-    # def open_website(self) -> bool:
-    #     """
-    #     Открывает сайт Kuru Swap.
-    #
-    #     Returns:
-    #         bool: True если сайт успешно открыт, False в противном случае
-    #     """
-    #     try:
-    #         logger.info('Opening Kuru website')
-    #         self.driver.get(self.BASE_URL)
-    #         time.sleep(2)  # Ждем загрузку страницы
-    #         logger.info('Kuru website opened successfully')
-    #         return True
-    #     except Exception as e:
-    #         logger.error(f'Error opening Kuru website: {str(e)}')
-    #         return False
-
 
     def open_website(self, from_token='0x0000000000000000000000000000000000000000',
                      to_token='0xf817257fed379853cDe0fa4F97AB987181B1E5Ea') -> bool:
@@ -117,13 +100,13 @@ class KuruSwap:
         BASE_URL = f'https://www.kuru.io/swap?from={from_token}&to={to_token}'
 
         try:
-            logger.info(f'Opening Kuru website: {BASE_URL}')
+            logger.info(f'Opening website: {BASE_URL}')
             self.driver.get(BASE_URL)
 
             # Ожидание загрузки страницы вместо time.sleep
             WebDriverWait(self.driver, 10).until(title_contains("Kuru"))
 
-            logger.info('Kuru website opened successfully')
+            logger.info('Website opened successfully')
             return True
 
         except WebDriverException as e:
@@ -131,7 +114,7 @@ class KuruSwap:
             return False
 
         except Exception as e:
-            logger.error(f'Unexpected error while opening Kuru website: {str(e)}')
+            logger.error(f'Unexpected error while opening website: {str(e)}')
             return False
 
     def connect_wallet(self, mm_address: str) -> bool:
@@ -270,7 +253,7 @@ class KuruSwap:
                                 if 'Refresh quote' == el_refresh_quote['text'] and el_refresh_quote['classes'] == 'text-sm font-medium':
                                     token_exist['element_refresh'] = el_refresh_quote['element']
                         try:
-                            number = float(el.text.split()[0])
+                            number = float(el.text.split()[0].replace(',', ''))  # Преобразуем строку 9,000.00 в число 9000.00
                             els_info_list.append(number)
                         except Exception:
                             pass
@@ -283,9 +266,9 @@ class KuruSwap:
                 token_exist.setdefault('selling_token', {})['number_tokens'] = number_tokens_selling
 
                 if number_tokens_selling == 0.0:
-                    logger.debug(f" (get_token_info), Токенов {selling_symbol} в кошельке нет")
+                    logger.info(f" (get_token_info), Токенов {selling_symbol} в кошельке нет")
                 else:
-                    logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
+                    logger.info(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_selling} {selling_symbol}')
 
                 # Обработка баланса buying token. Проверяем наличие данных и корректно преобразуем в float
                 number_tokens_buying = float(els_info_list[1]) if els_info_list[1] not in [None, 0, '0'] else 0.0
@@ -295,9 +278,9 @@ class KuruSwap:
 
                 # Логирование результата
                 if number_tokens_buying == 0.0:
-                    logger.debug(f" (get_token_info), Токенов {buying_symbol} в кошельке нет")
+                    logger.info(f" (get_token_info), Токенов {buying_symbol} в кошельке нет")
                 else:
-                    logger.debug(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
+                    logger.info(f' (get_token_info), Токены есть в кошельке, можно продать: {number_tokens_buying} {buying_symbol}')
 
                 return token_exist
 
@@ -322,7 +305,7 @@ class KuruSwap:
         if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
             css_selector_buying = r".app-container div.\!mt-0 input"
             elements_input_buying = SeleniumUtilities.find_element_safely(self.driver, By.CSS_SELECTOR, css_selector_buying)
-            logger.debug(f"При продаже {number} получим: {elements_input_buying.get_attribute('value')}")
+            logger.info(f"При продаже {number} получим: {elements_input_buying.get_attribute('value')}")
 
             quantity_will_purchase = elements_input_buying.get_attribute('value')
             return quantity_will_purchase
@@ -345,9 +328,9 @@ class KuruSwap:
 
 
         window_kuru = self.driver.current_window_handle  # Определяем вкладку Kuru
-        logger.debug(f' (swap), Current opened Kuru tab: {window_kuru}')
+        # logger.debug(f' (swap), Current opened Kuru tab: {window_kuru}')
         current_windows = self.driver.window_handles  # Определяем все открытые вкладки
-        logger.debug(f' (swap), Current opened tabs: {current_windows}')
+        # logger.debug(f' (swap), Current opened tabs: {current_windows}')
 
         token_info_swap['buying_token']['quantity_will_purchase'] = quantity_will_purchase
 
@@ -499,14 +482,17 @@ def kuru(driver, mm_address):
                          f"to {token_info_before_swap['buying_token']['symbol']} tokens successfully")
 
         time.sleep(2)
-        driver.refresh()
-        time.sleep(5)
+        # driver.refresh()
+        # time.sleep(5)
+
         # После успешного нажатия на кнопку <Go back> проверяем свапнутые токены
         token_info_after_swap = kuru_swap.get_token_info()
-        logger.debug(f" (kuru), Get token_info_after_swap successfully")
+        logger.info(f" (kuru), Get token_info_after_swap successfully \n"
+                                 f"  - {token_info_before_swap['selling_token']['number_tokens'] - token_info_after_swap['selling_token']['number_tokens']} {token_info_after_swap['selling_token']['symbol']}\n"
+                                 f"  + {token_info_after_swap['buying_token']['number_tokens'] - token_info_before_swap['buying_token']['number_tokens']} {token_info_before_swap['buying_token']['symbol']}")
 
-        logger.debug(f' (kuru), Initial token_info: {token_info_before_swap}')
-        logger.debug(f" (kuru), token_info_after_swap: {token_info_after_swap}")
+        # logger.debug(f' (kuru), Initial token_info: {token_info_before_swap}')
+        # logger.debug(f" (kuru), token_info_after_swap: {token_info_after_swap}")
 
 
         url_name_swap = driver.current_url
@@ -518,9 +504,8 @@ def kuru(driver, mm_address):
             print("Ошибка: Невозможно извлечь `from` и `to` из URL")
             token_from, token_to = None, None
         if token_from and token_to:
-            kuru_swap.open_website(from_token=token_to, to_token=token_from)  # Меняем местами
-            url_name_swap_revers = driver.current_url
-            logger.debug(f'url_name_swap_revers successful: {url_name_swap_revers}')
+            if not kuru_swap.open_website(from_token=token_to, to_token=token_from):  # Меняем местами
+                logger.debug(f'kuru_swap.open_website failed')
         else:
             logger.error("Ошибка: Не удалось открыть страницу обмена, поскольку адреса токенов невалидны.")
 
@@ -560,7 +545,9 @@ def kuru(driver, mm_address):
 
                 token_info_after_revers_swap = kuru_swap.get_token_info()
                 if token_info_before_revers_swap['selling_token']['number_tokens'] != token_info_after_revers_swap['selling_token']['number_tokens']:
-                    logger.debug(f" (kuru), Get token_info_after_revers_swap successfully")
+                    logger.info(f" (kuru), Get token_info_after_revers_swap successfully \n"
+                                 f"  - {token_info_before_revers_swap['selling_token']['number_tokens'] - token_info_after_revers_swap['selling_token']['number_tokens']} {token_info_after_revers_swap['selling_token']['symbol']}\n"
+                                 f"  + {token_info_after_revers_swap['buying_token']['number_tokens'] - token_info_before_revers_swap['buying_token']['number_tokens']} {token_info_after_revers_swap['buying_token']['symbol']}")
                     return False
                 else:
                     logger.debug(f" (kuru), Failed to token_info_after_revers_swap")

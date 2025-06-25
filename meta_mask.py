@@ -637,24 +637,35 @@ class MetaMaskHelper(SeleniumUtilities):
 
         def try_to_find_monad_testnet(self, target_network):
 
+            time.sleep(3)
             class_selector_show_test_networks  = "toggle-button toggle-button--off"
             el_show_test_networks = SeleniumUtilities.get_element(self.driver, class_selector_show_test_networks)
+
             if el_show_test_networks:
                 logger.debug(f' (try_to_find_monad_testnet), Кнопка показа тестовых сетей найдена')
+
+                el_show_test_networks.send_keys(Keys.PAGE_DOWN)  # Прокручиваем страницу вниз
+                logger.debug(f' (try_to_find_monad_testnet), Прокручиваем страницу вниз 1')
+                el_show_test_networks.send_keys(Keys.PAGE_DOWN)  # Прокручиваем страницу вниз
+                logger.debug(f' (try_to_find_monad_testnet), Прокручиваем страницу вниз 1')
+                el_show_test_networks.send_keys(Keys.PAGE_DOWN)  # Прокручиваем страницу вниз
+
                 if SeleniumUtilities.click_safely(el_show_test_networks):
                     logger.debug(f' (try_to_find_monad_testnet), Кнопка показа тестовых сетей нажата')
 
             else:
-                logger.warning(f' (ensure_monad_testnet_active), Кнопка показа тестовых сетей НЕ найдена')
+                logger.warning(f' (try_to_find_monad_testnet), Кнопка показа тестовых сетей НЕ найдена')
 
             class_list_test_networks_block = "mm-box multichain-network-list-menu"
             main_block = SeleniumUtilities.get_elements(self.driver, class_list_test_networks_block)
 
+
             if main_block:
-                logger.debug(f' (ensure_monad_testnet_active), main_block получен: {main_block}')
+                logger.debug(f' (try_to_find_monad_testnet), main_block получен: {main_block}')
                 res_info = SeleniumUtilities.parse_interactive_elements(main_block[0])
-                # pprint(res_info)
+
                 el_res = res_info['elements_info']
+
                 for el in el_res:
                     if target_network in el['text'] and el['tag_name'] == 'p':
                         logger.debug(
@@ -679,7 +690,7 @@ class MetaMaskHelper(SeleniumUtilities):
 
                 time.sleep(2)
                 # Шаг 2: Попытка найти сеть в списке
-                logger.info(f"Шаг 2: Попытка найти {target_network} в списке сетей")
+                logger.info(f"Шаг 2: Попытка найти в списке сетей: {target_network}")
                 if self.try_to_find_monad_testnet(target_network):
                     return True
 
@@ -722,7 +733,13 @@ class MetaMaskHelper(SeleniumUtilities):
                     return True
 
                 logger.warning(f"Обнаружена другая сеть: {current_network}, требуемая сеть: {expected_network}")
-                SeleniumUtilities.click_safely(element)
+                if SeleniumUtilities.click_safely(element):
+                    logger.debug(f"Клик по кнопке сети успешен")
+                    css_selector = 'section[role="dialog"].mm-modal-content__dialog'
+                    if SeleniumUtilities.click_safely(self.driver.find_element(By.CSS_SELECTOR, css_selector)):
+                        logger.debug(f"Элемент <Select a network> найден")
+                        if element.send_keys(Keys.PAGE_DOWN):  # Прокручиваем страницу вниз
+                            logger.info(f"Прокрутка страницы вниз успешна")
                 return False
 
             except Exception as e:
