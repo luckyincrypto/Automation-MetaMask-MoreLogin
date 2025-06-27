@@ -117,6 +117,9 @@ class SQLiteDatabase:
         required = ['activity_type', 'status', 'wallet_address']
         if missing := [field for field in required if field not in data]:
             raise ValueError(f"Missing required fields: {missing}")
+        if 'next_attempt' not in data:
+            data['next_attempt'] = datetime.now() + timedelta(hours=24)  # По умолчанию через 24 часа значение
+
 
     def _parse_activity_record(self, record) -> ActivityRecord:
         """Преобразует сырую запись из БД в ActivityRecord"""
@@ -237,24 +240,13 @@ class SQLiteDatabase:
                 for count in activity_counts:
                     logger.debug(f"Type: {count['activity_type']}, Count: {count['count']}, Last: {count['last_timestamp']}")
 
+                # Все запрошенные активности должны быть выполнены
+                return True, activity_types
+
 
             # Преобразуем записи в удобный формат
             parsed_activities = [self._parse_activity_record(activity) for activity in last_activities]
             logger.debug(f"Parsed activities for profile {row}: {parsed_activities}")
-
-
-            # for activity in parsed_activities:
-            #     # Проверяем кошелек
-            #     if activity['wallet_address'] != wallet_address:
-            #         logger.warning(f"Несоответствие кошелька для Профиля № {row}: БД({activity['wallet_address']}), "
-            #                        f"Текущий({wallet_address} для активности {activity['activity_type']})")
-            #         activity_type_carry_out_list.append(activity['activity_type'])
-            #
-            #     for activity_type in activity_types:
-            #         if activity_type not in activity['activity_type']:
-            #             logger.debug(f" Для Профиля №: {row}, активность: {activity_type} отсутствует в: {activity['activity_type']},"
-            #                          f" activity will be carried out")
-            #             activity_type_carry_out_list.append(activity_type)
 
             current_time = datetime.now()
 
@@ -270,8 +262,6 @@ class SQLiteDatabase:
                             logger.debug(f"Waiting time passed since last success, {activity['activity_type']} activity will be carried out")
                             activity_type_carry_out_list.append(activity['activity_type'])
                         logger.debug(f"Waiting until {next_allowed_time.strftime('%Y-%m-%d %H:%M:%S')}")
-                        activity_type_carry_out_list.append(activity['activity_type'])
-
 
                     except ValueError as e:
                         logger.error(f"Invalid timestamp format, {activity['activity_type']} activity will be carried out")
@@ -477,8 +467,9 @@ class SQLiteDatabase:
             with self._get_connection() as conn:
                 # Получаем все профили из базы
                 cursor = conn.execute("""
-                    SELECT DISTINCT profile_number, wallet_address
-                    FROM activities
+                    SELECT profile_number, MAX(wallet_address) as wallet_address 
+                    FROM activities 
+                    GROUP BY profile_number
                     ORDER BY profile_number
                 """)
                 all_profiles = cursor.fetchall()
