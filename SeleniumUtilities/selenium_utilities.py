@@ -45,14 +45,15 @@ class SeleniumUtilities:
         new_windows = driver.window_handles
 
         # Находим handle нового окна
-        new_window = list(set(new_windows) - set(current_windows))[-1]
-        logger.debug(f'new_window: {new_window}')
-        if len(new_window) >= 1:
-            logger.debug(f' Переключаемся на новое окно: {new_window}')
-            # Переключаемся на новое окно
+        new_window_handles = list(set(new_windows) - set(current_windows))
+        if new_window_handles:
+            new_window = new_window_handles[-1]
+            logger.debug(f' (switch_to_new_window), Переключаемся на новое окно: {new_window}')
             driver.switch_to.window(new_window)
             return new_window
-        return None
+        else:
+            logger.error(' (switch_to_new_window), Новое окно не найдено')
+            return None
 
     @staticmethod
     def find_element_safely(driver, by, selector, timeout=10):
@@ -73,10 +74,10 @@ class SeleniumUtilities:
             element = wait.until(EC.presence_of_element_located((by, selector)))
             return element
         except TimeoutException:
-            logger.debug(f"Element '{selector}' not found after {timeout} seconds")
+            logger.debug(f" (SeleniumUtilities.find_element_safely), Element: '{selector}' not found after {timeout} seconds")
             return None
         except Exception as e:
-            logger.error(f"Error finding element '{selector}': {e}")
+            logger.error(f" (SeleniumUtilities.find_element_safely), Error finding element '{selector}': {e}")
             return None
 
     @staticmethod
@@ -437,13 +438,13 @@ class SeleniumUtilities:
     @staticmethod
     def find_which_selector(driver, by, selectors, timeout):
         for selector in selectors:
-            logger.debug(f'Проверяем селектор: {selector}')
+            logger.debug(f' (SeleniumUtilities.find_which_selector), Проверяем селектор: {selector}')
             selector_element = SeleniumUtilities.find_element_safely(driver, by, selector, timeout)
             if selector_element:
-                logger.debug(f'Найден элемент, type: {selector_element.get_attribute('type')} по селектору: {selector}')
+                logger.debug(f' (SeleniumUtilities.find_which_selector), Найден элемент, type: {selector_element.get_attribute('type')} по селектору: {selector}')
                 return selector_element
-            logger.debug(f'Элемента не найдено по данному селектору: {selector}')
-        logger.debug(f'Элементов не найдено по данным селекторам')
+            logger.debug(f' (SeleniumUtilities.find_which_selector), Элемента не найдено по данному селектору: {selector}')
+        logger.debug(f' (SeleniumUtilities.find_which_selector), Элементов не найдено по данным селекторам')
         return None
 
     @staticmethod
@@ -491,9 +492,10 @@ class SeleniumUtilities:
         :return: Список найденных элементов.
         """
         class_selector = "." + ".".join(class_names.split())  # Преобразуем строку классов в CSS-селектор
+        logger.debug(f' (SeleniumUtilities.get_elements), Преобразуем строку классов в CSS-селектор -> class_selector: {class_selector}')
         elements = SeleniumUtilities.find_elements_safely(driver, By.CSS_SELECTOR, class_selector)  # Находим элементы
         return [el for el in elements]  # Получаем список элементов
-        # return [el.text.strip() for el in elements]  # Извлекаем и очищаем текст
+
 
     @staticmethod
     def get_element(driver, class_names: str) -> WebElement:

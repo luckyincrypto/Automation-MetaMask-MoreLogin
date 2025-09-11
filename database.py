@@ -487,7 +487,7 @@ class SQLiteDatabase:
                         conn, row, wallet_address, activity_types, DEFAULT_ACTIVITIES
                     )
 
-                    if should_process:
+                    if should_process and activity_type_carry_out_list:
                         eligible_profiles.append((row, wallet_address))
                         logger.debug(f"Профиль {row} подходит для обработки:{activity_type_carry_out_list}")
                     else:

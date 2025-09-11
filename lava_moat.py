@@ -32,6 +32,15 @@ def modify_file_runtimelavamoat(env_id: str) -> bool:
                     f"Последняя установленная версия MetaMask: {version_mm_latest} из {os.listdir(file_path_for_version_mm)}"
                 )
                 break
+            else:
+                if counter >= 5:
+                    elapsed_time_err = time.time() - start_time
+                    logger.error(
+                        f" (modify_file_runtimelavamoat), Time spent: {elapsed_time_err:.2f} sec for Cycles: {counter},\n"
+                        f"Проверьте путь к директории локального кэша path_local_cashe в config.yaml. \n"
+                        f"Если путь указан верно значит Extension MetaMask не найден в локальном кэше. "
+                        f"MoreLogin не успевает загрузить Extension MetaMask в браузерный профиль, ему что то мешает. \n")
+
         except FileNotFoundError:
             if counter >= 3:
                 elapsed_time_err = time.time() - start_time

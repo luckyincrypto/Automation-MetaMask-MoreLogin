@@ -185,6 +185,23 @@ class MetaMaskHelper(SeleniumUtilities):
 
         return False
 
+    def onboarding_unlock(self):
+        """Разблокировка MetaMask."""
+        if self.check_page_url(f"{self.base_url}onboarding/unlock"):
+
+            onboarding_unlock_page = self.find_element_safely(
+                self.driver,
+                By.CSS_SELECTOR,
+                '[data-testid="unlock-password"]',
+                timeout=35
+            )
+
+            if onboarding_unlock_page:
+                logger.debug("(unlock) Страница разблокировки обнаружена")
+                return True
+
+        return False
+
     def enter_password(self, password):
         """Ввод пароля."""
         # Ожидаем появления поля ввода
@@ -250,31 +267,36 @@ class MetaMaskHelper(SeleniumUtilities):
         return False
 
     def fill_seed(self, seed):
-        """Заполнение сид-фразы."""
+        """Заполнение сид-фразы по словам в 12 полей."""
         try:
-            fields = [
-                self.find_element_safely(
+            # Разбиваем сид-фразу на отдельные слова
+            seed_words = seed.split()
+            if len(seed_words) != 12:
+                logger.error("(fill_seed) Сид-фраза должна содержать ровно 12 слов")
+                return False
+
+            # Заполняем каждое поле отдельно
+            for i in range(12):
+                field = self.find_element_safely(
                     self.driver,
                     By.ID,
                     f"import-srp__srp-word-{i}"
-                ) for i in range(12)
-            ]
-
-            if all(fields):
-                if platform.system() == "Darwin":
-                    keys = Keys.COMMAND
+                )
+                if field:
+                    field.click()  # Нажимаем на поле для очистки
+                    field.clear()  # Очищаем поле (если нужно)
+                    field.send_keys(seed_words[i])  # Вводим слово напрямую в поле
+                    time.sleep(0.1)  # Небольшая пауза между вводом (опционально)
                 else:
-                    keys = Keys.CONTROL
+                    logger.error(f"(fill_seed) Не найдено поле для слова #{i + 1}")
+                    return False
 
-                pyperclip.copy(seed)
-                ActionChains(self.driver).key_down(keys).send_keys("v").key_up(keys).perform()
-                logger.debug("(fill_seed) Сид-фраза вставлена")
-                return True
+            logger.debug("(fill_seed) Сид-фраза успешно введена по словам")
+            return True
 
         except Exception as e:
-            logger.error(f"(fill_seed) Ошибка: {e}")
-
-        return False
+            logger.error(f"(fill_seed) Критическая ошибка: {e}")
+            return False
 
     def input_seed_phrase_and_password_restore_vault(self, seed, password):
         """Восстановление кошелька с использованием сид-фразы."""
@@ -326,15 +348,18 @@ class MetaMaskHelper(SeleniumUtilities):
         if not self.check_page_url(f"{self.base_url}onboarding/welcome"):
             return False
 
-        welcome = self.find_element_safely(
+
+        # Проверка на наличие кнопки "Get started"
+
+        welcome_new = self.find_element_safely(
             self.driver,
-            By.CLASS_NAME,
-            "onboarding-welcome",
+            By.CSS_SELECTOR,
+            '[data-testid="onboarding-get-started-button"]',
             timeout=35
         )
-
-        if welcome:
-            logger.info("(get_started) Начало работы с MetaMask")
+        if welcome_new:
+            welcome_new.click()
+            logger.info('(get_started) Начало работы с MetaMask "Get started"')
             return True
 
         return False
@@ -342,13 +367,45 @@ class MetaMaskHelper(SeleniumUtilities):
     def onboard_page(self, seed, password):
         """Процесс импорта кошелька."""
         # Согласие с условиями
-        self.click_safely(
+        if self.click_safely(
             self.find_element_safely(
                 self.driver,
-                By.ID,
-                "onboarding__terms-checkbox"
+                By.CSS_SELECTOR,
+                '[data-testid="terms-of-use-checkbox"]'
             )
-        )
+        ):
+            logger.info(f'(onboard_page) Согласие с условиями - Success')
+
+        # Scroll down of "Review our Terms of Use"
+        if self.click_safely(
+            self.find_element_safely(
+                self.driver,
+                By.CSS_SELECTOR,
+                '[data-testid="terms-of-use-scroll-button"]'
+            )
+        ):
+            logger.info(f'(onboard_page) Scroll down of "Review our Terms of Use" - Success')
+
+        # Press button "Agree"
+        if self.click_safely(
+                self.find_element_safely(
+                    self.driver,
+                    By.CSS_SELECTOR,
+                    '[data-testid="terms-of-use-agree-button"]'
+                )
+        ):
+            logger.info(f'(onboard_page) Press button "Agree" - Success')
+
+        # Press button "Agree"
+        if self.click_safely(
+                self.find_element_safely(
+                    self.driver,
+                    By.CSS_SELECTOR,
+                    '[data-testid="terms-of-use-agree-button"]'
+                )
+        ):
+            logger.info(f'(onboard_page) Press button "Agree" - Success')
+
 
         # Импорт существующего кошелька
         self.click_safely(
@@ -429,47 +486,87 @@ class MetaMaskHelper(SeleniumUtilities):
 
         return False
 
-    # def pop_up_window_close(self):
-    #     """Закрытие всплывающих окон."""
-    #     try:
-    #         got_it_btn = self.find_element_safely(
-    #             self.driver,
-    #             By.XPATH,
-    #             "//button[contains(text(), 'Got it')]",
-    #             timeout=3
-    #         )
-    #
-    #         if got_it_btn:
-    #             got_it_btn.click()
-    #             logger.debug("(pop_up_window_close) Всплывающее окно закрыто")
-    #             return True
-    #         return None
-    #
-    #     except Exception:
-    #         logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
-    #         return False
+    def pop_up_window_close(self):
+        """Закрытие всплывающих окон."""
+        try:
+            got_it_btn = self.find_element_safely(
+                self.driver,
+                By.XPATH,
+                "//button[normalize-space()]",
+                # "//button[contains(text(), 'Got it')]",
+                timeout=3
+            )
+
+            if got_it_btn:
+                got_it_btn.click()
+                logger.debug("(pop_up_window_close) Всплывающее окно закрыто")
+                return True
+            return None
+
+        except Exception:
+            logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
+            return False
+
+    def con_eth_network_window_close(self):
+        """Закрытие всплывающих окон."""
+        try:
+            close_btn = self.find_element_safely(
+                self.driver,
+                By.CLASS_NAME,
+                "page-container__header-close",
+                timeout=3
+            )
+
+            if close_btn:
+                close_btn.click()
+                logger.debug("(connect ETH network window close) Всплывающее окно закрыто")
+                return True
+            return None
+
+        except Exception:
+            logger.debug("(pop_up_window_close) Всплывающее окно не найдено")
+            return False
 
     def starting_metamask(self, seed, password):
         """Основной процесс запуска MetaMask."""
         self.delete_others_windows()
         self.open_tab(f"{self.base_url}unlock")
 
+        onboarding_welcome = 'chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/home.html#onboarding/welcome'
+
         if self.unlock():
             if self.enter_password(password) and self.click_unlock_button():
-                # self.pop_up_window_close()
+                self.pop_up_window_close()
                 if self.check_page_url():
                     return True
 
                 if self.handle_incorrect_password():
                     logger.info("(starting_metamask) Восстановление кошелька")
                     if self.input_seed_phrase_and_password_restore_vault(seed, password):
-                        # self.pop_up_window_close()
+                        self.pop_up_window_close()
                         return True
 
         elif self.get_started():
             logger.info("(starting_metamask) Первоначальная настройка")
             if self.onboard_page(seed, password):
-                # self.pop_up_window_close()
+                if self.check_page_url(f"{self.base_url}onboarding/pin-extension"):
+                    self.pop_up_window_close()
+                    self.pop_up_window_close()
+                    self.con_eth_network_window_close()
+
+
+                time.sleep(5)
+                if self.onboarding_unlock():
+                    if self.enter_password(password) and self.click_unlock_button():
+                        self.pop_up_window_close()
+                        if self.check_page_url():
+                            return True
+
+                        if self.handle_incorrect_password():
+                            logger.info("(starting_metamask) Восстановление кошелька")
+                            if self.input_seed_phrase_and_password_restore_vault(seed, password):
+                                self.pop_up_window_close()
+                                return True
                 return True
 
         return False
@@ -479,7 +576,7 @@ class MetaMaskHelper(SeleniumUtilities):
         if self.starting_metamask(seed, password):
             # self.version_mm()
             logger.update(f"Версия MM: {self.version_mm()}")
-            # self.pop_up_window_close()
+            self.pop_up_window_close()
             return self.check_mm_data_base(
                 mm_address,
                 row,
@@ -513,7 +610,8 @@ class MetaMaskHelper(SeleniumUtilities):
     class NetworkManager:
         """Класс для управления сетями с оригинальными селекторами"""
         # NETWORK_DISPLAY = (By.XPATH, '//*[@data-testid="network-display"]')
-        NETWORK_DISPLAY = (By.XPATH, "//*[@id='app-content']/div/div[contains(@class, 'mm-box') and contains(@class, 'multichain-app-header')]/div/div[1]/button/p")
+        NETWORK_DISPLAY = (By.XPATH, '//*[@id="app-content"]/div/div[3]/div/div/div/div[2]/div/div/div/div[1]/div/button/span[1]/div/p')
+        # NETWORK_DISPLAY = (By.XPATH, "//*[@id='app-content']/div/div[contains(@class, 'mm-box') and contains(@class, 'multichain-app-header')]/div/div[1]/button/p")
         ADD_CUSTOM_NETWORK_BTN = (By.XPATH, "//button[contains(., 'Add a custom network')]")
         RPC_DROPDOWN = (By.XPATH, '//*[@data-testid="test-add-rpc-drop-down"]')
         EXPLORER_DROPDOWN = (By.XPATH, '//*[@data-testid="test-explorer-drop-down"]')

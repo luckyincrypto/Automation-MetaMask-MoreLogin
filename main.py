@@ -370,6 +370,10 @@ async def operationEnv(
         driver, seed, env_id, password, mm_address, worksheet_mm, workbook_mm, row, file_path
 ):
     """Основная операция."""
+
+    logger.debug(f'Ожидание 15 секунд... для первоначальной инициализации MetaMask в браузерный профиль.')
+    await asyncio.sleep(15)
+
     try:
         logger.debug(
             f" (operationEnv) STEP 2 <<< Запуск Env ID: {env_id} Основная операция >>>"
@@ -429,8 +433,8 @@ async def operationEnv(
             # fantasy(driver)
 
             # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
-            # helper.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
-            # helper.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
+            # mm.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
+            # mm.open_tab("https://debank.com/profile/" + wallet_mm_from_browser_extension)
 
 
 
@@ -484,7 +488,8 @@ async def main():
 
             # Запись числовых значений от 1 до 100 в первую колонку, начиная со 2-й строки.
             for row in range(2, 102):  # от 2 до 101 (включительно)
-                worksheet_mm.cell(row=row, column=1)
+                cell = worksheet_mm.cell(row=row, column=1)
+                cell.value = row - 1  # Записываем значение от 1 до 100
 
             workbook_mm.save(DATA_BASE_PATH)  # Сохранение нового файла
             logger.info(f" (main) DATABASE created new file: {DATA_BASE_PATH}.")
