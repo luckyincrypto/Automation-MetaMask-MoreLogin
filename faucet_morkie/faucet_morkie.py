@@ -189,15 +189,28 @@ class MonadFaucet:
                     timeout=5
                 )
 
+                # Получаем высоту всей страницы
+                scroll_height = driver.execute_script("return document.body.scrollHeight")
+
+                # Прокручиваем вниз на 50% ------------
+                # driver.execute_script(f"window.scrollTo(0, {scroll_height * 0.5});")
+
+                # Плавная прокрутка на 50% ------------
+                for i in range(0, int(scroll_height * 0.5), 50):
+                    driver.execute_script(f"window.scrollTo(0, {i});")
+                    time.sleep(0.01)  # Эффект плавности
+
                 logger.debug('Шаг 1: Нажимаем кнопку Claim')
                 text_btn = 'Claim'
                 if not SeleniumUtilities.find_click_button(main_block, text_btn):
                     logger.debug(f' (process_claim), Не удачное нажатие на кнопку: {text_btn}')
+                logger.info('Шаг 1: Нажали кнопку Claim - успешно!')
 
                 logger.debug('Шаг 2: Вводим адрес в поле для ввода')
                 locator = (By.XPATH, "//input[@type='text' and starts-with(@placeholder, 'Enter your EVM Address')]")
                 if not SeleniumUtilities.fill_field(driver, locator, wallet_address):
                     logger.debug(f' (process_claim), Не удачный ввод в поле для адреса')
+                logger.info('Шаг 2: Адрес в поле для ввода введен - успешно!')
 
                 logger.debug('Шаг 3: Нажимаем кнопку Claim')
                 text_btn = 'Claim'
@@ -208,9 +221,10 @@ class MonadFaucet:
                 # if SeleniumUtilities.handle_element_obstruction(driver, main_block):
                 #     logger.debug("Мешающие окна закрыты, проверяем результат...")
 
-
+                logger.debug('Шаг 4: Ожидаем статуса транзакции')
                 result = MonadFaucet.get_faucet_status(driver, main_block)
-                # time.sleep(5)
+                if result:
+                    logger.info('Шаг 2: Статус транзакции получен - успешно!')
 
                 # Ensure all required fields are present
                 result.update({

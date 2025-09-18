@@ -16,7 +16,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from automation.run_automation import schedule_next_run, check_auto_mode
 from database import process_activity, DatabaseError, process_random_profile
-# from fantasy.fantasy import fantasy
+from onchaingm.onchaingm import Onchaingm
 from kuru.kuru import kuru
 
 # Локальные модули
@@ -421,16 +421,11 @@ async def operationEnv(
             except Exception as e:
                 logger.error(f"Error processing activity: {e}")
                 raise
-            # helper.open_tab("https://faucet.morkie.xyz/monad")
+            # mm.open_tab("https://faucet.morkie.xyz/monad")
 
-            time.sleep(5)
-            # Активность на сайте: https://www.kuru.io/
-            driver.switch_to.new_window()
-            kuru(driver, mm_address)
-
-            time.sleep(5)
-            # Активность на сайте: https://monad.fantasy.top/shop
-            # fantasy(driver)
+            # driver.switch_to.new_window()
+            # ocgm = Onchaingm(driver)
+            # ocgm.onchaingm()
 
             # Открываем вкладки для проверки активов по адресу кошелька в Debank и MonadExplorer.
             # mm.open_tab(f"https://testnet.monadexplorer.com/address/{wallet_mm_from_browser_extension}")
@@ -447,6 +442,7 @@ async def main():
     """Главная функция"""
     script_start = datetime.now()
     logger.info("Начало работы скрипта")
+    # Sent to Telegram
 
     # Инициализируем переменные в начале функции
     count_profile = 0
@@ -461,7 +457,8 @@ async def main():
 
             # Получаем один рандомный аккаунт
             logger.info("Автоматический режим: выбор аккаунта из базы данных")
-            selected_account, wallet = process_random_profile()
+            # Sent to Telegram
+            selected_account, wallet, activity_type_carry_out_list = process_random_profile()
             start_account = selected_account
             end_account = selected_account
             mode_close_profile_or_not = 'y'

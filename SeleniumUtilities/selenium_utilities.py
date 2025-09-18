@@ -81,7 +81,7 @@ class SeleniumUtilities:
             return None
 
     @staticmethod
-    def find_elements_safely(driver, by, selector, timeout=10) -> list:
+    def find_elements_safely(driver, by, selector, timeout=15) -> list:
         """
         Найти несколько элементов безопасно, без выброса исключений.
 
@@ -246,7 +246,7 @@ class SeleniumUtilities:
         """Ищет и безопасно кликает по кнопке, выполняя поиск во вложенных элементах."""
         number_of_symbols = (len(text_btn))  # подсчет количества символов в строковой переменной
         try:
-            logger.info(f"Начинаем поиск кнопки с текстом: '{text_btn}'")
+            logger.debug(f" (find_click_button), Начинаем поиск кнопки с текстом: '{text_btn}'")
             parsed_data = SeleniumUtilities.parse_interactive_elements(main_block)
 
             for element_info in parsed_data['elements_info']:
@@ -258,10 +258,10 @@ class SeleniumUtilities:
                         continue
 
                     if SeleniumUtilities.click_safely(button):
-                        logger.debug(f"Успешный клик по кнопке '{text_btn}'")
+                        logger.debug(f" (find_click_button), Успешный клик по кнопке '{text_btn}'")
                         return True
 
-            logger.warning(f"Не найдена кнопка с текстом: '{text_btn}'")
+            logger.warning(f" (find_click_button), Не найдена кнопка с текстом: '{text_btn}'")
             return False
 
         except Exception as e:

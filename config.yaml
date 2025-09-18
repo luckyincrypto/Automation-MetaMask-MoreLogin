@@ -4,7 +4,7 @@
 # UPDATE - Выводит информацию об обновлении Базы данных или в файле runtime-lavamoat.js (пользовательский уровень).
 # WARNING - Отображение всех сообщений кроме отладочных и информационных (DEBUG, INFO)
 # ERROR - Отображение всех сообщений кроме отладочных, информационных и предупреждающих (DEBUG, INFO, WARNING)
-LOG_LEVEL: DEBUG  # DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL: INFO  # DEBUG, INFO, WARNING, ERROR
 
 # Глобальные настройки скрипта
 GLOBAL_SETTINGS:
@@ -15,8 +15,8 @@ GLOBAL_SETTINGS:
     # 2) Перейдите в директорию проекта: (для примера) cd D:\Python\Automation-MetaMask-MoreLogin
     # 3) Активируйте виртуальное окружение: .\.venv\Scripts\Activate
     # 4) Запустите скрипт: python main.py (для windows) или python3 main.py (для linux)
-  MIN_INTERVAL_MINUTES: 15 # Минимальный интервал между запусками (в минутах). Для работы в режиме AUTO_MODE: true.
-  MAX_INTERVAL_MINUTES: 60 # Максимальный интервал между запусками (в минутах). Для работы в режиме AUTO_MODE: true.
+  MIN_INTERVAL_MINUTES: 70 # Минимальный интервал между запусками (в минутах). Для работы в режиме AUTO_MODE: true.
+  MAX_INTERVAL_MINUTES: 120 # Максимальный интервал между запусками (в минутах). Для работы в режиме AUTO_MODE: true.
 
   # Если AUTO_MODE: false, то тогда запустите интерактивный режим, вводя дополнительные команды в консоли.
   # Интерактивный режим. (выбор опций в консоли в процессе работы скрипта).
@@ -45,8 +45,8 @@ ACTIVITY_SETTINGS:
     MINUTES: 3
   # Устанавливаем активности по умолчанию
   # список активностей, которые будут использоваться по умолчанию по порядку добавления
-  DEFAULT_ACTIVITIES: 'Monad_Faucet_Portal'
-#  DEFAULT_ACTIVITIES: 'Monad_Faucet_Portal, Fantasy_Claim_XP'
+#  DEFAULT_ACTIVITIES: 'Monad_Faucet_Portal'
+  DEFAULT_ACTIVITIES: 'Monad_Faucet_Portal, Kuru_Swap'
 
 # Настройки обработки активностей Kuru
 KURU_ACTIVITY_SETTINGS:
@@ -63,5 +63,5 @@ KURU_ACTIVITY_SETTINGS:
   MAX_PERCENT_TOKEN: 98 # максимальный процент от свапа других токенов
 
   # Время ожидания после успешной свапа (часы, минуты)
-  MIN_WAIT_TIME_BETWEEN_SWAP: 5 # минимальное время ожидания после успешного свапа
-  MAX_WAIT_TIME_BETWEEN_SWAP: 15 # максимальное время ожидания после успешного свапа
+  MIN_WAIT_TIME_BETWEEN_SWAP: 180 # минимальное время ожидания после успешного свапа
+  MAX_WAIT_TIME_BETWEEN_SWAP: 360 # максимальное время ожидания после успешного свапа

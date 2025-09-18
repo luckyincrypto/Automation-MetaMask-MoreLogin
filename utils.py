@@ -27,6 +27,11 @@ def random_number_for_sell(selling_symbol, number_tokens_selling):
         f"{number_for_sell} на продажу")
     return number_for_sell
 
+def convert_minutes_to_time(total_minutes: int) -> tuple[int, int]:
+    hours = total_minutes // 60
+    minutes = total_minutes % 60
+    return hours, minutes
+
 
 def adjust_window_position(driver):
     """Настраивает позицию и размер окна MetaMask."""

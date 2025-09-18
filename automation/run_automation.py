@@ -148,7 +148,8 @@ def schedule_next_run():
         logger.info("Устанавливаем задание запуска скрипта с рандомным интервалом")
         interval_minutes = get_random_interval()
         next_run_time = datetime.now() + timedelta(minutes=interval_minutes)
-        logger.info(f"Запланирован следующий запуск через {interval_minutes} минут (в {next_run_time.strftime('%Y-%m-%d %H:%M:%S')})")
+        logger.info(f"Запланирован следующий запуск через: {interval_minutes} минут (в {next_run_time.strftime('%Y-%m-%d %H:%M:%S')})")
+        # Sent to Telegram
 
         # Создаем временный PS скрипт для установки задачи с интервалом
         temp_script = PROJECT_ROOT / "automation" / "temp_install.ps1"

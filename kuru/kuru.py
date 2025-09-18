@@ -1,4 +1,6 @@
+from datetime import datetime, timedelta
 import random
+from config import MIN_WAIT_TIME_BETWEEN_SWAP, MAX_WAIT_TIME_BETWEEN_SWAP
 import re
 import time
 from pprint import pprint
@@ -60,6 +62,62 @@ def extract_swap_addresses(url: str) -> List[str]:
     return []  # Если параметры отсутствуют, возвращаем пустой список
 
 
+def normalize_value(value_str: str) -> str:
+    original_value = value_str
+    value_str = value_str.replace(',', '').strip()
+
+    # Карта нижних индексов
+    subscript_map = {
+        '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4',
+        '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9'
+    }
+
+    # Преобразуем нижние индексы в обычные цифры
+    def convert_subscripts(s):
+        return ''.join(subscript_map.get(char, char) for char in s)
+
+    value_str = convert_subscripts(value_str)
+
+    # Обработка специального формата: 0.0ₙXYZ → 0. + n нулей + XYZ
+    match = re.match(r'^0\.0(\d)(\d+)$', value_str)
+    if match:
+        zero_count = int(match.group(1))
+        rest = match.group(2)
+        cleaned_value = f"0.{''.join(['0'] * zero_count)}{rest}"
+        logger.debug(f"(normalize_value), Специальный формат: '{original_value}' → '{cleaned_value}'")
+        return cleaned_value
+
+    # Обработка суффиксов K, M, B
+    multiplier = 1
+    suffix_match = re.search(r'([KMB])$', value_str.upper())
+    if suffix_match:
+        suffix = suffix_match.group(1)
+        if suffix == 'K':
+            multiplier = 1_000
+        elif suffix == 'M':
+            multiplier = 1_000_000
+        elif suffix == 'B':
+            multiplier = 1_000_000_000
+        value_str = value_str[:-1]
+
+    # Удаляем всё лишнее кроме цифр и точки
+    cleaned_value = re.sub(r'[^\d\.]', '', value_str)
+
+    # Защита от ложных преобразований: если cleaned_value уже валидное число, не трогаем
+    if re.fullmatch(r'\d+(\.\d+)?', cleaned_value):
+        try:
+            normalized = float(cleaned_value) * multiplier
+            logger.debug(f"(normalize_value), Исходное: '{original_value}' → '{normalized}'")
+            return str(normalized)
+        except ValueError:
+            logger.error(f"(normalize_value), Ошибка преобразования: '{cleaned_value}' из '{original_value}'")
+            return original_value
+
+    # Если не удалось распознать — возвращаем исходное
+    logger.warning(f"(normalize_value), Не удалось интерпретировать: '{original_value}'")
+    return original_value
+
+
 class KuruSwap:
     """Класс для работы с Kuru Swap"""
 
@@ -83,6 +141,7 @@ class KuruSwap:
         Args:
             driver: WebDriver - экземпляр драйвера
         """
+        self.current_url = None
         self.driver = driver
         self.metamask = MetaMaskHelper(driver)
 
@@ -239,12 +298,6 @@ class KuruSwap:
 
                 time.sleep(3)
                 token_exist = {'selling_token': {}, 'buying_token': {}}
-
-                # Получаем символы токенов
-                # els_symbol_list = SeleniumUtilities.get_elements(
-                #     self.driver,
-                #     self.TOKEN_SELECTORS['symbol']
-                # )
                 class_path = 'w-max'
                 els_symbol_list = SeleniumUtilities.find_elements_safely(
                     self.driver,
@@ -257,68 +310,34 @@ class KuruSwap:
                 selling_symbol = token_exist['selling_token']['symbol'] = els_symbol_list[0].text.strip()
                 buying_symbol = token_exist['buying_token']['symbol'] = els_symbol_list[2].text.strip()
 
-
-                def normalize_value(value_str):
-                    original_value = value_str  # Сохраняем исходное значение для логов
-                    value_str = value_str.upper().replace(',', '').strip()
-
-                    # Удаляем все символы, кроме цифр, точки и суффиксов
-                    cleaned_value = re.sub(r'[^\d\.KMB]', '', value_str)
-
-                    logger.debug(f"(normalize_value), Исходное: '{original_value}' → Очищенное: '{cleaned_value}'")
-
-                    multiplier = 1
-                    if cleaned_value.endswith('K'):
-                        multiplier = 1_000
-                        cleaned_value = cleaned_value[:-1]
-                    elif cleaned_value.endswith('M'):
-                        multiplier = 1_000_000
-                        cleaned_value = cleaned_value[:-1]
-                    elif cleaned_value.endswith('B'):
-                        multiplier = 1_000_000_000
-                        cleaned_value = cleaned_value[:-1]
-
-                    try:
-                        normalized = float(cleaned_value) * multiplier
-                        logger.debug(f"(normalize_value), Преобразовано в float: {normalized}")
-                        return str(normalized)
-                    except ValueError:
-                        logger.error(
-                            f"(normalize_value), Ошибка преобразования: '{cleaned_value}' из '{original_value}'")
-                        return original_value  # Возвращаем исходное, если не удалось преобразовать
-
                 # Получаем балансы токенов и элемент обновления
                 def extract_token_values(driver):
                     results  = []
+                    time.sleep(5)
                     blocks = SeleniumUtilities.get_elements(driver, 'flex items-center space-x-2 visible')
 
                     if blocks:
                         logger.debug(f"(get_token_info), Найдено блоков: {len(blocks)}")
 
                     for block in blocks:
+                        # Проверка наличия <span>
                         try:
-                            # Проверка наличия <span>
-                            try:
-                                span_element = block.find_element(By.TAG_NAME, 'span')
-                                span_value = normalize_value(span_element.text.strip())
-                            except NoSuchElementException:
-                                logger.error(f" (get_token_info, extract_token_values), Не найден <span> в блоке")
-                                continue
+                            span_element = block.find_element(By.TAG_NAME, 'span')
+                            span_value = normalize_value(span_element.text.strip())
+                        except NoSuchElementException:
+                            logger.error(f" (get_token_info, extract_token_values), Не найден <span> в блоке")
+                            continue
 
-                            # Проверка наличия <div class="max-w-16 truncate undefined">
-                            try:
-                                token_element = block.find_element(
-                                    By.XPATH, './/div[@class="max-w-16 truncate undefined"]'
-                                )
-                                token_name = token_element.text.strip()
-                            except NoSuchElementException:
-                                logger.error(f" (get_token_info, extract_token_values), Не найден криптовалютный тикер (truncate)")
-                                continue
-
-                            results .append((token_name, span_value))
-
-                        except Exception as err:
-                            logger.error(f" (get_token_info, extract_token_values), Ошибка при парсинге блока: {err}")
+                        # Проверка наличия <div class="max-w-16 truncate undefined">
+                        try:
+                            token_element = block.find_element(
+                                By.XPATH, './/div[@class="max-w-16 truncate undefined"]'
+                            )
+                            token_name = token_element.text.strip()
+                        except NoSuchElementException:
+                            logger.error(f" (get_token_info, extract_token_values), Не найден криптовалютный тикер (truncate)")
+                            continue
+                        results .append((token_name, span_value))
 
                     return results
 
@@ -364,10 +383,12 @@ class KuruSwap:
         # css_selector_selling = '.app-container div.space-y-2 input'
         elements_input = SeleniumUtilities.find_elements_safely(self.driver, By.CSS_SELECTOR, css_selector_selling)
         if elements_input[0]:
-            logger.debug(f" (input_number_for_sell),  elements_input[0]: {elements_input[0].get_attribute('value')}")
             elements_input[0].clear()
             if elements_input[0].send_keys(number):
                 logger.debug(f" (input_number_for_sell), Вставка значения: {number} успешна")
+                time.sleep(3)
+                logger.debug(
+                    f" (input_number_for_sell),  elements_input[0]: {elements_input[0].get_attribute('value')}")
         else:
             logger.error("Не удалось найти элементы для ввода числа 1")
         time.sleep(3)
@@ -411,7 +432,7 @@ class KuruSwap:
         attempt = 0
         while attempt < max_attempts:
             attempt += 1
-            logger.debug(f'Attempt №: {attempt}')
+            logger.debug(f' (KuruSwap.swap), Attempt swap №: {attempt}')
             time.sleep(3)
 
             text_button = 'Swap'
@@ -478,6 +499,9 @@ class KuruSwap:
         logger.error(" (swap), Max swap attempts reached")
         return False
 
+
+
+# Заменяем функцию kuru() на новую реализацию
 def kuru(driver, mm_address):
     """
     Основная функция для работы с Kuru Swap.
@@ -487,148 +511,200 @@ def kuru(driver, mm_address):
         mm_address: str - адрес кошелька MetaMask
 
     Returns:
-        Dict[str, Dict[str, Any]]: Информация о токенах для свопа
+        Dict[str, Any]: Результат операции с обязательными полями
     """
+    # global next_attempt, result_data
     try:
         # Создаем экземпляр класса для работы с Kuru Swap
         kuru_swap = KuruSwap(driver)
+        result_data = {
+            'activity_type': 'Kuru_Swap',
+            'status': 'error',
+            'wallet_address': mm_address,
+            'next_attempt': None,
+            'details': {}
+        }
 
         # Открываем сайт
-        while True:
-            driver.refresh()
+        random_address = random.choice(toket_address_list)
+        logger.debug(f"Случайный токен: {random_address}")
 
-            random_address = random.choice(toket_address_list)
-            logger.debug(f"Случайный токен: {random_address}")
-
-            if not kuru_swap.open_website(to_token=random_address):
-                logger.error(f" (kuru), Failed to open website Kuru")
-                continue  # переходит сразу к следующему кругу цикла.
-            logger.debug(f" (kuru), Opened website Kuru")
-            break  # выход из цикла
+        if not kuru_swap.open_website(to_token=random_address):
+            logger.error("Failed to open website Kuru")
+            result_data['details'] = {'error': 'Failed to open website'}
+            return result_data
 
         # Подключаем кошелек
-        while True:
-            if not kuru_swap.connect_wallet(mm_address):
-                logger.error(" (kuru), Failed to connect MetaMask wallet")
-                continue  # переходит сразу к следующему кругу цикла.
-            logger.debug(" (kuru), Connected MetaMask wallet")
-            break  # выход из цикла
+        if not kuru_swap.connect_wallet(mm_address):
+            logger.error("Failed to connect MetaMask wallet")
+            result_data['details'] = {'error': 'Failed to connect wallet'}
+            return result_data
 
-        # Получаем информацию по токенам
+        # Получаем информацию по токенам до первого свапа
         token_info_before_swap = kuru_swap.get_token_info()
         if not token_info_before_swap:
-            logger.error(" (kuru), Failed to get token info")
-            return False
-        logger.debug(f' (kuru), Get token_info_before_swap successfully: {token_info_before_swap}')
+            logger.error("Failed to get initial token info")
+            result_data['details'] = {'error': 'Failed to get initial token info'}
+            return result_data
 
-        # Если есть токены в кошельке более чем 0.2 и это MON, то продаем его
-        if token_info_before_swap['selling_token']['number_tokens'] > 0.2 and token_info_before_swap['selling_token']['symbol'].lower() == 'mon':
-            # Вводим количество токенов для продажи и получаем количество получаемых токенов
+        # Первый свап (продажа MON или другого токена)
+        first_swap_details = {}
+        if token_info_before_swap['selling_token']['number_tokens'] > 0.2 and \
+                token_info_before_swap['selling_token']['symbol'].lower() == 'mon':
+
             if not kuru_swap.swap(token_info_before_swap):
-                logger.error(f" (kuru), Failed to swap {token_info_before_swap['selling_token']['symbol']} tokens")
-                return False
-            logger.debug(f" (kuru), Swapped from {token_info_before_swap['selling_token']['symbol']} "
-                         f"to {token_info_before_swap['buying_token']['symbol']} tokens successfully")
+                logger.error(f"Failed to swap {token_info_before_swap['selling_token']['symbol']} tokens")
+                result_data['details'] = {'error': f'First swap failed: from: {token_info_before_swap["selling_token"]["symbol"]} to: {token_info_before_swap["buying_token"]["symbol"]}'}
+                # Sent to Telegram
+                return result_data
+            # Sent to Telegram
+            logger.info(f'First swap successful,\n'
+                        f' from: {token_info_before_swap["selling_token"]["symbol"]} to: {token_info_before_swap["buying_token"]["symbol"]}')
 
-        # Для обратного свапа. Если есть другие токены в кошельке больше 0,0 кроме MON, то продаем его
-        elif token_info_before_swap['selling_token']['number_tokens'] != 0.0:
-            if not kuru_swap.swap(token_info_before_swap):
-                logger.error(f" (kuru), Failed to swap {token_info_before_swap['selling_token']['symbol']} tokens")
-                return False
-            logger.debug(f" (kuru), Swapped from {token_info_before_swap['selling_token']['symbol']} "
-                         f"to {token_info_before_swap['buying_token']['symbol']} tokens successfully")
+            # Получаем информацию после первого свапа
+            token_info_after_swap = kuru_swap.get_token_info()
+            if not token_info_after_swap:
+                logger.error("Failed to get token info after first swap")
+                result_data['details'] = {'error': 'Failed to get token info after first swap'}
+                # Sent to Telegram
+                return result_data
 
-        time.sleep(2)
-        # driver.refresh()
-        # time.sleep(5)
+            # Вычисляем изменения после первого свапа
+            sold_tokens = token_info_before_swap['selling_token']['number_tokens'] - \
+                          token_info_after_swap['selling_token']['number_tokens']
 
-        # После успешного нажатия на кнопку <Go back> проверяем свапнутые токены
-        token_info_after_swap = kuru_swap.get_token_info()
-        logger.info(f" (kuru), Get token_info_after_swap successfully \n"
-                                 f"  - {token_info_before_swap['selling_token']['number_tokens'] - token_info_after_swap['selling_token']['number_tokens']} {token_info_after_swap['selling_token']['symbol']}\n"
-                                 f"  + {token_info_after_swap['buying_token']['number_tokens'] - token_info_before_swap['buying_token']['number_tokens']} {token_info_before_swap['buying_token']['symbol']}")
+            bought_tokens = token_info_after_swap['buying_token']['number_tokens'] - \
+                            token_info_before_swap['buying_token']['number_tokens']
 
-        # logger.debug(f' (kuru), Initial token_info: {token_info_before_swap}')
-        # logger.debug(f" (kuru), token_info_after_swap: {token_info_after_swap}")
+            logger.info(f'First swap: \n'
+                        f'Продано токенов: {sold_tokens} {token_info_before_swap['selling_token']['symbol']} tokens\n'
+                        f'Куплено токенов: {bought_tokens} {token_info_after_swap['buying_token']['symbol']} tokens')
 
+            first_swap_details = {
+                'first_swap': {
+                    'sold_before_after': f'{token_info_before_swap["selling_token"]["number_tokens"]} - {token_info_after_swap["selling_token"]["number_tokens"]}',
+                    'sold_tokens_symbol': f'{sold_tokens} {token_info_before_swap["selling_token"]["symbol"]}',
+                    'bought_before_after': f'{token_info_before_swap["buying_token"]["number_tokens"]} - {token_info_after_swap["buying_token"]["number_tokens"]}',
+                    'bought_tokens_symbol': f'{bought_tokens} {token_info_after_swap["buying_token"]["symbol"]}',
+                }
+            }
+            # Sent to Telegram
 
-        url_name_swap = driver.current_url
-        list_addresses = extract_swap_addresses(url_name_swap)
-        # Проверяем, что список не пустой и содержит два элемента
-        if len(list_addresses) == 2:
+            # Подготовка к обратному свапу
+            url_name_swap = driver.current_url
+            list_addresses = extract_swap_addresses(url_name_swap)
+            if len(list_addresses) != 2:
+                logger.error("Failed to extract token addresses from URL")
+                result_data['details'] = {**first_swap_details, 'error': 'Failed to extract token addresses from URL'}
+                return result_data
+
             token_from, token_to = list_addresses
-        else:
-            print("Ошибка: Невозможно извлечь `from` и `to` из URL")
-            token_from, token_to = None, None
-        if token_from and token_to:
-            if not kuru_swap.open_website(from_token=token_to, to_token=token_from):  # Меняем местами
-                logger.debug(f'kuru_swap.open_website failed')
-        else:
-            logger.error("Ошибка: Не удалось открыть страницу обмена, поскольку адреса токенов невалидны.")
 
-        while True:
+            # Открываем страницу для обратного свапа
+            if not kuru_swap.open_website(from_token=token_to, to_token=token_from):
+                logger.error("Failed to open reverse swap page")
+                result_data['details'] = {**first_swap_details, 'error': 'Failed to open reverse swap page'}
+                return result_data
+
+            # Подключаем кошелек
+            if not kuru_swap.connect_wallet(mm_address):
+                logger.error("Failed to connect MetaMask wallet")
+                result_data['details'] = {'error': 'Failed to connect wallet'}
+                return result_data
+
+            # Получаем информацию для обратного свапа
             time.sleep(3)
-            # Кнопка <Swap> для обратного свапа
-            text_button = 'Swap'
-            element_btn = SeleniumUtilities.find_button_by_text(driver, text_button)
-            if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
-                break
-            # Получаем информацию по токенам обратный свап
-            token_info_before_revers_swap = kuru_swap.get_token_info()
-            if not token_info_before_revers_swap:
-                logger.error(" (kuru), Failed to get token info token_info_before_revers_swap")
-                return False
-            logger.debug(f' (kuru), Get token_info_before_revers_swap successfully')
+            token_info_before_reverse_swap = kuru_swap.get_token_info()
+            if not token_info_before_reverse_swap:
+                logger.error("Failed to get token info for reverse swap")
+                result_data['details'] = {**first_swap_details, 'error': 'Failed to connect wallet'}
+                return result_data
 
-            # Если есть токены в кошельке более чем 0,2 и это MON, то продаем его
-            if token_info_before_revers_swap['selling_token']['number_tokens'] > 0.2 and \
-                    token_info_before_revers_swap['selling_token']['symbol'].lower() == 'mon':
-                # Вводим количество токенов для продажи и получаем количество получаемых токенов
-                if not kuru_swap.swap(token_info_before_revers_swap):
-                    logger.error(f" (kuru), Failed to swap {token_info_before_revers_swap['selling_token']['symbol']} tokens")
-                    return False
-                logger.debug(f" (kuru), Swapped from {token_info_before_revers_swap['selling_token']['symbol']} "
-                             f"to {token_info_before_revers_swap['buying_token']['symbol']} tokens successfully")
+            # Выполняем обратный свап
+            max_attempts = 5
+            attempt = 0
+            while attempt < max_attempts:
+                attempt += 1
+                logger.debug(f'Attempt for reverse swap №: {attempt}')
+                time.sleep(3)
 
-            # Обратный свап. Если есть другие токены в кошельке больше 0,0 кроме MON, то продаем его
-            elif token_info_before_revers_swap['selling_token']['number_tokens'] != 0.0:
-                if not kuru_swap.swap(token_info_before_revers_swap):
-                    logger.error(f" (kuru), Failed to swap {token_info_before_revers_swap['selling_token']['symbol']} tokens")
-                    return False
-                logger.debug(f" (kuru), Swapped from {token_info_before_revers_swap['selling_token']['symbol']} "
-                             f"to {token_info_before_revers_swap['buying_token']['symbol']} tokens successfully")
+                if not kuru_swap.swap(token_info_before_reverse_swap):
+                    logger.error(
+                        f"Failed to reverse swap {token_info_before_reverse_swap['selling_token']['symbol']} tokens")
+                    continue
+                logger.info(f'Reverse swap successful,\n'
+                            f' from: {token_info_before_reverse_swap["selling_token"]["symbol"]} to: {token_info_before_reverse_swap["buying_token"]["symbol"]}')
+                # Sent to Telegram
 
-                time.sleep(5)
+                # Получаем финальную информацию после обратного свапа
+                driver.refresh()
+                time.sleep(3)
+                token_info_after_reverse_swap = kuru_swap.get_token_info()
+                if not token_info_after_reverse_swap:
+                    logger.error("Failed to get token info after reverse swap")
+                    result_data['details'] = {**first_swap_details, 'error': 'Failed to get token info after reverse swap'}
+                    # Sent to Telegram
+                    return result_data
 
-                token_info_after_revers_swap = kuru_swap.get_token_info()
-                if token_info_before_revers_swap['selling_token']['number_tokens'] != token_info_after_revers_swap['selling_token']['number_tokens']:
-                    logger.info(f" (kuru), Get token_info_after_revers_swap successfully \n"
-                                 f"  - {token_info_before_revers_swap['selling_token']['number_tokens'] - token_info_after_revers_swap['selling_token']['number_tokens']} {token_info_after_revers_swap['selling_token']['symbol']}\n"
-                                 f"  + {token_info_after_revers_swap['buying_token']['number_tokens'] - token_info_before_revers_swap['buying_token']['number_tokens']} {token_info_after_revers_swap['buying_token']['symbol']}")
-                    return False
+                # Вычисляем изменения после обратного свапа
+                reverse_sold_tokens = token_info_before_reverse_swap['selling_token']['number_tokens'] - \
+                                      token_info_after_reverse_swap['selling_token']['number_tokens']
+
+                reverse_bought_tokens = token_info_after_reverse_swap['buying_token']['number_tokens'] - \
+                                        token_info_before_reverse_swap['buying_token']['number_tokens']
+                logger.info(
+                    f'Обратный свап. Продано токенов: {reverse_sold_tokens} {token_info_before_reverse_swap['selling_token']['symbol']} tokens')
+                logger.info(f'Обратный свап. Куплено токенов: {reverse_bought_tokens} {token_info_after_reverse_swap['buying_token']['symbol']} tokens')
+                # Sent to Telegram
+
+                # Проверяем, что свапы были успешными
+                if (token_info_before_swap['selling_token']['number_tokens'] >
+                        token_info_after_swap['selling_token']['number_tokens'] and
+                        token_info_before_swap['buying_token']['number_tokens'] <
+                        token_info_after_swap['buying_token']['number_tokens'] and
+                        token_info_before_reverse_swap['selling_token']['number_tokens'] >
+                        token_info_after_reverse_swap['selling_token']['number_tokens'] and
+                        token_info_before_reverse_swap['buying_token']['number_tokens'] <
+                        token_info_after_reverse_swap['buying_token']['number_tokens']):
+                    # Успешное выполнение
+                    wait_minutes = random.randint(MIN_WAIT_TIME_BETWEEN_SWAP, MAX_WAIT_TIME_BETWEEN_SWAP)
+                    next_attempt = (datetime.now() + timedelta(minutes=wait_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+
+                    result_data.update({
+                        'status': 'success',
+                        'next_attempt': next_attempt,
+                        'details': {
+                            **first_swap_details,
+                            'second_swap': {
+                                'sold_before_after': f'{token_info_before_reverse_swap["selling_token"]["number_tokens"]} - {token_info_after_reverse_swap["selling_token"]["number_tokens"]}',
+                                'sold_tokens_symbol': f'{reverse_sold_tokens} {token_info_before_reverse_swap["selling_token"]["symbol"]}',
+                                'bought_before_after': f'{token_info_before_reverse_swap["buying_token"]["number_tokens"]} - {token_info_after_reverse_swap["buying_token"]["number_tokens"]}',
+                                'bought_tokens_symbol': f'{reverse_bought_tokens} {token_info_after_reverse_swap["buying_token"]["symbol"]}',
+                            }
+                        }
+                    })
+                    return result_data
                 else:
-                    logger.debug(f" (kuru), Failed to token_info_after_revers_swap")
-                    return True
+                    logger.error(f"Swap completed but token amounts didn't change as expected. Attempt for reverse swap №: {attempt}")
+                    result_data['details'] = {'error': f'Swap completed but token amounts didn\'t change as expected, Attempt for reverse swap №: {attempt}'}
+                    continue
 
-            else:
-                logger.error(" (kuru), No tokens to swap")
-                classes="flex h-7 cursor-pointer items-center rounded-full border bg-white px-2 text-xs font-semibold duration-200 hover:bg-black/5 dark:bg-white dark:bg-opacity-5 dark:hover:border-brand/50 dark:hover:text-brand"
-                el_100 = SeleniumUtilities.get_element(driver, classes)
-                if el_100:
-                    logger.debug(f'el_100 found')
-                    if SeleniumUtilities.click_safely(el_100):
-                        logger.debug(f'el_100 click_safely')
-                        time.sleep(3)
-                        text_button = 'Swap'
-                        element_btn = SeleniumUtilities.find_button_by_text(driver, text_button, timeout=20)
-                        if element_btn and element_btn.is_enabled() and element_btn.is_displayed():
-                            if not SeleniumUtilities.click_safely(element_btn):
-                                logger.error(" (swap), Failed to click button <Swap>")
-
-                return False
+            # Если не удалось выполнить обратный свап после всех попыток
+            next_attempt = (datetime.now() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+            result_data.update({
+                'status': 'error',
+                'next_attempt': next_attempt,
+                'details': {**first_swap_details, 'error': 'Reverse swap failed after max attempts'}
+            })
+            return result_data
 
 
+        else:
+            logger.error("No tokens to swap or insufficient balance")
+            result_data['details'] = {'error': 'No tokens to swap or insufficient balance'}
+            return result_data
 
     except Exception as e:
         logger.error(f'Error in kuru function: {str(e)}')
-        return None
+        result_data['details'] = {'error': str(e)}
+        return result_data
