@@ -289,7 +289,7 @@ class SQLiteDatabase:
                             activity_type_carry_out_list.append(activity['activity_type'])
 
                     except ValueError as e:
-                        logger.error(f" Invalid next_attempt time format, {activity['activity_type']} activity will be carried out")
+                        logger.error(f" Pofile: {row} - Invalid next_attempt time format: {activity['activity_type']} - activity will be carried out")
                         activity_type_carry_out_list.append(activity['activity_type'])
 
 
