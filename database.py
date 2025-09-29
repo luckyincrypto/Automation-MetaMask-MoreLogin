@@ -518,7 +518,7 @@ class SQLiteDatabase:
                 formatted_selected_profiles_for_processing = ",\n".join(selected_profiles_for_processing)
                 logger.info(f'Выбранные профили для обработки: {len(selected_profiles_for_processing)} шт.\n'
                             f'Профиль  |     Адрес      |       Активности\n'
-                            f'{formatted_selected_profiles_for_processing}')
+                            f'{formatted_selected_profiles_for_processing}\n')
                 # Sent to Telegram
 
                 # Выбираем случайный профиль из подходящих
@@ -634,7 +634,7 @@ def process_random_profile():
 
     row, wallet, activity_type_carry_out_list = profile
     logger.info(f"Выбран случайный профиль для обработки: № {row}, "
-                f"адрес: {wallet[:6]}...{wallet[-4:]}, {activity_type_carry_out_list}")
+                f"адрес: {wallet[:6]}...{wallet[-4:]}, {activity_type_carry_out_list}\n")
     # Sent to Telegram
     return row, wallet, activity_type_carry_out_list
 

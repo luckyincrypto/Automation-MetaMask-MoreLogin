@@ -690,7 +690,9 @@ def kuru(driver, mm_address):
                     continue
 
             # Если не удалось выполнить обратный свап после всех попыток
-            next_attempt = (datetime.now() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+            wait_minutes = random.randint(MIN_WAIT_TIME_BETWEEN_SWAP, MAX_WAIT_TIME_BETWEEN_SWAP)
+            next_attempt = (datetime.now() + timedelta(minutes=wait_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+            # next_attempt = (datetime.now() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
             result_data.update({
                 'status': 'error',
                 'next_attempt': next_attempt,
